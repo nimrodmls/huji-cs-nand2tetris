@@ -13,5 +13,16 @@ CHIP Xor {
     OUT out;
 
     PARTS:
-    // Put your code here:
+    // Not(in=a, out=nota); // 1
+    // Not(in=b, out=notb); // 1
+    // And(a=nota, b=b, out=case1); // 2
+    // And(a=a, b=notb, out=case2); // 2
+    // Or(a=case1, b=case2, out=out); // 3
+    // Total NAND gates: 9
+
+    Nand(a=a, b=b, out=anandb);
+    Nand(a=a, b=anandb, out=mid1);
+    Nand(a=b, b=anandb, out=mid2);
+    Nand(a=mid1, b=mid2, out=out);
+    // Total NAND gates: 4
 }
