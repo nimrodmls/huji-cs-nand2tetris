@@ -50,4 +50,24 @@ CHIP ALU {
     // You only need to submit the "full" ALU, no need to submit the partial
     // implementation (ALU-nostat).
     // Put your code here:
+    Mux16(a=x, b=false, sel=zx, out=postzx);
+    Not16(in=postzx, out=negx);
+    Mux16(a=postzx, b=negx, sel=nx, out=postzxnx);
+
+    Mux16(a=y, b=false, sel=zy, out=postzy);
+    Not16(in=postzy, out=negy);
+    Mux16(a=postzy, b=negy, sel=ny, out=postzyny);
+
+    Add16(a=postzxnx, b=postzyny, out=addxy);
+    And16(a=postzxnx, b=postzyny, out=andxy);
+    Mux16(a=andxy, b=addxy, sel=f, out=comp);
+
+    Not16(in=comp, out=notcomp);
+    Mux16(a=comp, b=notcomp, sel=no, out=finalout);
+
+    
+    
+
+    // Setting the actual output pin of the chip
+    And16(a=true, b=finalout, out=out);
 }
