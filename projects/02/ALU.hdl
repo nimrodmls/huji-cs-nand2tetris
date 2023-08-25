@@ -44,30 +44,34 @@ CHIP ALU {
         ng; // 1 if (out < 0),  0 otherwise
 
     PARTS:
-    // You're advised to work on the ALU chip in two steps:
-    // - First, without handling status outputs (ALU-nostat)
-    // - Then, adding the missing functionality for the "full" chip (ALU). 
-    // You only need to submit the "full" ALU, no need to submit the partial
-    // implementation (ALU-nostat).
-    // Put your code here:
+    // Handling zx & nx
     Mux16(a=x, b=false, sel=zx, out=postzx);
     Not16(in=postzx, out=negx);
     Mux16(a=postzx, b=negx, sel=nx, out=postzxnx);
 
+    // Handling zy & ny
     Mux16(a=y, b=false, sel=zy, out=postzy);
     Not16(in=postzy, out=negy);
     Mux16(a=postzy, b=negy, sel=ny, out=postzyny);
 
+    // Handling x+y / x&y (f)
     Add16(a=postzxnx, b=postzyny, out=addxy);
     And16(a=postzxnx, b=postzyny, out=andxy);
     Mux16(a=andxy, b=addxy, sel=f, out=comp);
 
+    // Handling negation (no)
     Not16(in=comp, out=notcomp);
     Mux16(a=comp, b=notcomp, sel=no, out=finalout);
 
-    
-    
+    // Handling zr: Validating if each bit is indeed 0
+    //Not16(in=finalout, out=notfinalout);
+    //And16(a=notfinalout, b=true, out=zr);
+    Or16Way(in=finalout, out=isoutnotzero);
+    Not(in=isoutnotzero, out=zr);
 
+    // Handling ng: Validating negativeness by inspecting the MSB
+    IsNegative16(in=finalout, out=ng);
+    
     // Setting the actual output pin of the chip
     And16(a=true, b=finalout, out=out);
 }

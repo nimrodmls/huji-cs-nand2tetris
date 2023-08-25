@@ -1,0 +1,11 @@
+/**
+ * Checking if a 16-bit bus is representing a negative number
+ */
+
+CHIP IsNegative16 {
+    IN in[16];
+    OUT out;
+
+    PARTS:
+    And(a=in[15], b=true, out=out);
+}
