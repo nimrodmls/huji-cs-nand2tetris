@@ -1,5 +1,6 @@
 /**
  * Checking if a 16-bit bus is representing a negative number
+ * Validating negativeness by inspecting the MSB (1 => negative, 0 => non-negative)
  */
 
 CHIP IsNegative16 {

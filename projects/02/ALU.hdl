@@ -64,14 +64,12 @@ CHIP ALU {
     Mux16(a=comp, b=notcomp, sel=no, out=finalout);
 
     // Handling zr: Validating if each bit is indeed 0
-    //Not16(in=finalout, out=notfinalout);
-    //And16(a=notfinalout, b=true, out=zr);
     Or16Way(in=finalout, out=isoutnotzero);
     Not(in=isoutnotzero, out=zr);
 
-    // Handling ng: Validating negativeness by inspecting the MSB
+    // Handling ng
     IsNegative16(in=finalout, out=ng);
-    
+
     // Setting the actual output pin of the chip
     And16(a=true, b=finalout, out=out);
 }
