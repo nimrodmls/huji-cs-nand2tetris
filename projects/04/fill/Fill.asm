@@ -35,4 +35,54 @@
 // - Remind you to select 'no animation', and then test the program
 //   interactively by pressing and releasing some keyboard keys
 
-// Put your code here.
+@8192
+D=A
+@pixelcount
+M=D
+
+(BLACKEN)
+
+    @pixelcount
+    D=M
+    @SCREEN
+    A=D+A
+    M=1
+
+    @pixelcount
+    M=M-1
+    D=M
+    @BLACKEN
+    D;JGT
+
+// Black
+@currentpixel
+M=1
+
+// White
+@currentpixel
+M=0
+
+(PAINTSINGLECOLOR)
+
+    @pixelcount
+    D=M
+    @SCREEN
+    D=D+A
+    @currentpixel
+    M=D
+    @pixelcolor
+    D=M
+    @currentpixel
+    M=D
+    
+    @pixelcount
+    M=M-1
+    D=M
+    @BLACKEN
+    D;JGT
+
+(FINLOOP)
+    @FINLOOP
+    0;JMP
+
+//(WHITEN)
