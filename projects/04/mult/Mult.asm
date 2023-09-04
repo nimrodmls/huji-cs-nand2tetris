@@ -16,4 +16,53 @@
 // - Your program should not change the values stored in R0 and R1.
 // - You can implement any multiplication algorithm you want.
 
-// Put your code here.
+    // Initializing & zeroing the result
+    @result
+    M=0
+
+    // Initializing the iterator of the loop
+    // (not using the original registers!)
+    @R0
+    D=M
+    @iter
+    M=D
+
+    // Making sure the second number is not 0,
+    // if so, the calculation is hence 0
+    @R1
+    D=M
+    @END
+    D;JEQ
+
+// Multiplication loop
+(LOOP)
+    // "while-loop logic" - If iterator is 0 then finish, otherwise continue
+    @iter
+    D=M
+    @END
+    D;JEQ
+
+    // Addition of each iteration
+    @result
+    D=M
+    @R1
+    D=D+M
+    @result
+    M=D
+
+    // Decrementing the iterator and jumping to beginning of the loop
+    @iter
+    M=M-1
+    @LOOP
+    0;JMP
+
+// Setting the result
+(END)
+    @result
+    D=M
+    @R2
+    M=D
+
+(FINLOOP)
+    @FINLOOP
+    0;JMP
