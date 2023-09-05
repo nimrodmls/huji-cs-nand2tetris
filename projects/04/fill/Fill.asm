@@ -35,35 +35,47 @@
 // - Remind you to select 'no animation', and then test the program
 //   interactively by pressing and releasing some keyboard keys
 
-@8192
-D=A
-@pixelcount
-M=D
+// Checking the input and determining whether to whiten or blacken
+(CHECKINPUT)
 
-(BLACKEN)
-
-    @pixelcount
-    D=M
-    @SCREEN
-    A=D+A
-    M=1
-
-    @pixelcount
-    M=M-1
+    @KBD
     D=M
     @BLACKEN
-    D;JGT
+    D;JNE
+    @WHITEN
+    0;JMP
 
-// Black
-@currentpixel
-M=1
+// We get here if we need to blacken the screen
+(BLACKEN)
 
-// White
-@currentpixel
-M=0
+    // Setting the color to black and jumping to paint
+    @pixelcolor
+    M=-1
+    @PAINTSINGLECOLOR
+    0;JMP
 
+// We get here if we need to whiten the screen
+(WHITEN)
+
+    @pixelcolor
+    M=0
+    // Fallthrough! Don't add code between here and PAINTSINGLECOLOR!
+
+// Once we wish to paint the whole screen, we go here
 (PAINTSINGLECOLOR)
 
+    @8192
+    D=A
+    @pixelcount
+    M=D
+
+(PAINTLOOP)
+
+    // Decrementing the pixel counter
+    @pixelcount
+    M=M-1
+
+    // Painting the pixel
     @pixelcount
     D=M
     @SCREEN
@@ -73,16 +85,19 @@ M=0
     @pixelcolor
     D=M
     @currentpixel
+    A=M
     M=D
     
+    // If there are more pixels to paint, we continue the loop
     @pixelcount
-    M=M-1
     D=M
-    @BLACKEN
+    @PAINTLOOP
     D;JGT
+
+    // We done painting, we should go back to receive input
+    @CHECKINPUT
+    0;JMP
 
 (FINLOOP)
     @FINLOOP
     0;JMP
-
-//(WHITEN)
