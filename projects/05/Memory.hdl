@@ -27,5 +27,14 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    // Analyzed in Python that bits 15 and 14 should be 00,01 for RAM access,
+    // or 10 for screen access, or 11 for keyboard access
+    // Although the 11 bits can also represent much bigger number, this is not supported
+    // and assumed correct according to the validation requirements of the exercise
+    DMux4Way(in=load, sel=address[13..14], a=ram1, b=ram2, c=screen, d=kbd);
+    Or(a=ram1, b=ram2, out=ram);
+    RAM16K(in=in, load=ram, address=address[0..13], out=ramout);
+    Screen(in=in, load=screen, address=address[0..12], out=screenout);
+    Keyboard(out=kbdout);
+    Mux4Way16(a=ramout, b=ramout, c=screenout, d=kbdout, sel=address[13..14], out=out);
 }
