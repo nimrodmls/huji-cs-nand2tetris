@@ -23,5 +23,26 @@ CHIP ExtendAlu {
      OUT out[16], zr, ng;
      
      PARTS:
-     // Put your code here:
+     // Choosing the correct shift method, according to the the instruction input
+     ShiftRight(in=x, out=xright);
+     ShiftLeft(in=x, out=xleft);
+     ShiftRight(in=y, out=yright);
+     ShiftLeft(in=y, out=yleft);
+     Mux4Way16(a=yright, b=xright, c=yleft, d=xleft, sel=instruction[4..5], out=shiftout);
+
+     // Choosing the correct control bits, yet again according to the instruction
+     Mux16(a=shiftout, b=x, sel=instruction[8], out=xalu);
+     Mux16(a=false, b=y, sel=instruction[8], out=yalu);
+     Mux(a=false, b=instruction[0], sel=instruction[8], out=nobit);
+     Mux(a=false, b=instruction[1], sel=instruction[8], out=fbit);
+     // Notice these following 2 muxes, they are intended let the ALU output the shifted
+     // x/y WITHOUT any modification, if the shift instruction is placed
+     // otherwise, the ALU will behave normally according to the given instruction
+     Mux(a=true, b=instruction[2], sel=instruction[8], out=nybit);
+     Mux(a=true, b=instruction[3], sel=instruction[8], out=zybit);
+     Mux(a=false, b=instruction[4], sel=instruction[8], out=nxbit);
+     Mux(a=false, b=instruction[5], sel=instruction[8], out=zxbit);
+
+     ALU(x=xalu, y=yalu, zx=zxbit, nx=nxbit, zy=zybit, 
+         ny=nybit, f=fbit, no=nobit, out=out, zr=zr, ng=ng);
 }
