@@ -35,7 +35,7 @@ CHIP ExtendAlu {
      Mux16(a=false, b=y, sel=instruction[8], out=yalu);
      Mux(a=false, b=instruction[0], sel=instruction[8], out=nobit);
      Mux(a=false, b=instruction[1], sel=instruction[8], out=fbit);
-     // Notice these following 2 muxes, they are intended let the ALU output the shifted
+     // Note these following 2 muxes, they are intended let the ALU output the shifted
      // x/y WITHOUT any modification, if the shift instruction is placed
      // otherwise, the ALU will behave normally according to the given instruction
      Mux(a=true, b=instruction[2], sel=instruction[8], out=nybit);
