@@ -6,6 +6,7 @@ as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
 
+# THIS FILE IS UNUSED!
 
 class Code:
     """Translates Hack assembly language mnemonics into binary codes."""

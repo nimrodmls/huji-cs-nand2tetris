@@ -10,8 +10,6 @@ import sys
 import typing
 from SymbolTable import SymbolTable
 from Parser import Parser
-from Code import Code
-
 
 def assemble_file(
         input_file: typing.TextIO, output_file: typing.TextIO) -> None:
@@ -26,7 +24,7 @@ def assemble_file(
     # parser = Parser(input_file)
     # Note that you can write to output_file like so:
     # output_file.write("Hello world! \n")
-    pass
+    asm_parser = Parser(input_file)
 
 
 if "__main__" == __name__:
