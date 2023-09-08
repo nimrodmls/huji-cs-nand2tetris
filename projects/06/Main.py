@@ -8,7 +8,6 @@ Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 import os
 import sys
 import typing
-from SymbolTable import SymbolTable
 from Parser import Parser
 
 def assemble_file(
@@ -25,7 +24,9 @@ def assemble_file(
     # Note that you can write to output_file like so:
     # output_file.write("Hello world! \n")
     asm_parser = Parser(input_file)
-
+    while asm_parser.has_more_commands():
+        cmd = asm_parser.get_next_command()
+        output_file.write(cmd + "\n")
 
 if "__main__" == __name__:
     # Parses the input path and calls assemble_file on each input file.
