@@ -92,7 +92,27 @@ class CodeWriter:
 
     @staticmethod
     def vm_eq() -> str:
-        pass
+        """
+        """
+        # 
+        return """// eq
+        @SP
+        M=M-1
+        A=M
+        D=M
+        A=A-1
+        D=D-M
+        @IS_EQUAL
+        D;JEQ
+        D=0
+        @SET_RESULT
+        0;JMP
+        (IS_EQUAL)
+        D=1
+        (SET_RESULT)
+        @SP
+        A=M-1
+        M=D"""
 
     @staticmethod
     def vm_gt() -> str:
@@ -117,11 +137,11 @@ class CodeWriter:
     # Stack-manipulating commands
 
     @staticmethod
-    def vm_push(segment: str, address: str) -> str:
+    def vm_push(segment: str, address: int) -> str:
         pass
 
     @staticmethod
-    def vm_pop(segment: str, address: str) -> str:
+    def vm_pop(segment: str, address: int) -> str:
         pass
 
     def write_arithmetic(self, command: str) -> None:

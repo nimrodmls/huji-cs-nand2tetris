@@ -20,12 +20,11 @@ def translate_file(
         input_file (typing.TextIO): the file to translate.
         output_file (typing.TextIO): writes all output to this file.
     """
-    # Your code goes here!
-    # It might be good to start with something like:
-    # parser = Parser(input_file)
-    # code_writer = CodeWriter(output_file)
-    pass
-
+    parser = Parser(input_file)
+    asm_cmd = parser.get_next_command()
+    while None != asm_cmd:
+        output_file.write(asm_cmd)
+        asm_cmd = parser.get_next_command()
 
 if "__main__" == __name__:
     # Parses the input path and calls translate_file on each input file.

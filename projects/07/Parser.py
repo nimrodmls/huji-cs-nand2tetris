@@ -77,14 +77,22 @@ class Parser:
         """
         Replaces has_more_commands() & advance() from the original template.
         """
+        # Return None if we reached the end of the file
+        if self._current_command_index >= len(self._code):
+            return None
+        
         # Iterating until we find a non-comment line
         ready_code = Parser._strip_comment(self._code[self._current_command_index])
         while 0 == len(ready_code):
             ready_code = Parser._strip_comment(self._code[self._current_command_index])
         ready_code = ready_code.split()
 
+        # If we haven't found another line of code, after the comment, we will get
+        # here and return None, means we got to the end of the file
         if 0 == len(ready_code):
             return None
+
+        self._current_command_index += 1
 
         # The first element of ready_code is the VM command,
         # hence we get the proper handler for it, and call it
