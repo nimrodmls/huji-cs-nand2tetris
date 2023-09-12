@@ -46,15 +46,49 @@ class CodeWriter:
 
     @staticmethod
     def vm_add() -> str:
-        pass
+        """
+        Returning the Hack Assembly instructions for addition of
+        2 numbers on the stack. Both input values are popped, and the
+        result is pushed, hence the result is on top of the stack.
+        """
+        # We manually set the stack pointer to one position less, as we
+        # pop two values and push one value
+        return """// add
+        @SP
+        M=M-1
+        A=M
+        D=M
+        A=A-1
+        M=D+M"""
 
     @staticmethod
     def vm_sub() -> str:
-        pass
+        """
+        Returning the Hack Assembly instructions for subtraction of
+        2 numbers on the stack. Both input values are popped, and the
+        result is pushed, hence the result is on top of the stack.
+        """
+        # Implementation is identical to addition, only final arithmetic is changed
+        return """// sub
+        @SP
+        M=M-1
+        A=M
+        D=M
+        A=A-1
+        M=D-M"""
 
     @staticmethod
     def vm_neg() -> str:
-        pass
+        """
+        Returning the Hack Assembly instructions for negation of 
+        a number on the stack.
+        """
+        # We don't pop/push anything, we just "hotfix" the value on
+        # the stack directly
+        return """// neg
+        @SP
+        A=M-1
+        M=-M"""
 
     @staticmethod
     def vm_eq() -> str:

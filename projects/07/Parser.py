@@ -5,8 +5,8 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
-import typing
-from typing import Optional
+from CodeWriter import CodeWriter
+from typing import Optional, TextIO
 
 
 class Parser:
@@ -49,7 +49,7 @@ class Parser:
 
     COMMENT_NOTATION = "//"
 
-    def __init__(self, input_file: typing.TextIO) -> None:
+    def __init__(self, input_file: TextIO) -> None:
         """Gets ready to parse the input file.
 
         Args:
@@ -59,30 +59,32 @@ class Parser:
         self._current_command_index = 0
         self._command_handlers = {
             # Arithmetic Commands
-            "add": None,
-            "sub": None,
-            "neg": None,
-            "eq": None,
-            "gt": None,
-            "lt": None,
-            "and": None,
-            "or": None,
-            "not": None,
+            "add": CodeWriter.vm_add,
+            "sub": CodeWriter.vm_sub,
+            "neg": CodeWriter.vm_neg,
+            "eq": CodeWriter.vm_eq,
+            "gt": CodeWriter.vm_gt,
+            "lt": CodeWriter.vm_lt,
+            "and": CodeWriter.vm_and,
+            "or": CodeWriter.vm_or,
+            "not": CodeWriter.vm_not,
             # Stack-manipulating Commands
-            "push": None,
-            "pop": None
+            "push": lambda segment, address: CodeWriter.vm_push(segment, int(address)),
+            "pop": lambda segment, address: CodeWriter.vm_pop(segment, int(address)),
         }
 
     def get_next_command(self) -> Optional[str]:
         """
         Replaces has_more_commands() & advance() from the original template.
         """
-        asm_code = None
         # Iterating until we find a non-comment line
         ready_code = Parser._strip_comment(self._code[self._current_command_index])
         while 0 == len(ready_code):
             ready_code = Parser._strip_comment(self._code[self._current_command_index])
         ready_code = ready_code.split()
+
+        if 0 == len(ready_code):
+            return None
 
         # The first element of ready_code is the VM command,
         # hence we get the proper handler for it, and call it
