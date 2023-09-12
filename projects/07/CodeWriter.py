@@ -7,45 +7,44 @@ Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
 import typing
 
+RELATIONS_ASM = \
+"""@SP
+M=M-1
+A=M
+D=M
+A=A-1
+D=D-M
+@IS_TRUE_{relation}_{count}
+D;{relation}
+D=0
+@SET_RESULT_{relation}_{count}
+0;JMP
+(IS_TRUE_{relation}_{count})
+D=1
+(SET_RESULT_{relation}_{count})
+@SP
+A=M-1
+M=D
+"""
 
 class CodeWriter:
     """Translates VM commands into Hack assembly code."""
 
-    def __init__(self, output_stream: typing.TextIO) -> None:
+    def __init__(self) -> None:
         """Initializes the CodeWriter.
 
         Args:
             output_stream (typing.TextIO): output stream.
         """
-        # Your code goes here!
-        # Note that you can write to output_stream like so:
-        # output_stream.write("Hello world! \n")
-        pass
-
-    def set_file_name(self, filename: str) -> None:
-        """Informs the code writer that the translation of a new VM file is 
-        started.
-
-        Args:
-            filename (str): The name of the VM file.
-        """
-        # Your code goes here!
-        # This function is useful when translating code that handles the
-        # static segment. For example, in order to prevent collisions between two
-        # .vm files which push/pop to the static segment, one can use the current
-        # file's name in the assembly variable's name and thus differentiate between
-        # static variables belonging to different files.
-        # To avoid problems with Linux/Windows/MacOS differences with regards
-        # to filenames and paths, you are advised to parse the filename in
-        # the function "translate_file" in Main.py using python's os library,
-        # For example, using code similar to:
-        # input_filename, input_extension = os.path.splitext(os.path.basename(input_file.name))
-        pass
+        # Counting the amount of (in)equalities, so labels can be set properly
+        # in the asm code
+        self._eq_counter = 1
+        self._lt_counter = 1
+        self._gt_counter = 1
 
     # Arithmetic commands
 
-    @staticmethod
-    def vm_add() -> str:
+    def vm_add(self) -> str:
         """
         Returning the Hack Assembly instructions for addition of
         2 numbers on the stack. Both input values are popped, and the
@@ -61,8 +60,7 @@ class CodeWriter:
         A=A-1
         M=D+M"""
 
-    @staticmethod
-    def vm_sub() -> str:
+    def vm_sub(self) -> str:
         """
         Returning the Hack Assembly instructions for subtraction of
         2 numbers on the stack. Both input values are popped, and the
@@ -77,8 +75,7 @@ class CodeWriter:
         A=A-1
         M=D-M"""
 
-    @staticmethod
-    def vm_neg() -> str:
+    def vm_neg(self) -> str:
         """
         Returning the Hack Assembly instructions for negation of 
         a number on the stack.
@@ -90,58 +87,39 @@ class CodeWriter:
         A=M-1
         M=-M"""
 
-    @staticmethod
-    def vm_eq() -> str:
+    def vm_eq(self) -> str:
         """
         """
         # 
-        return """// eq
-        @SP
-        M=M-1
-        A=M
-        D=M
-        A=A-1
-        D=D-M
-        @IS_EQUAL
-        D;JEQ
-        D=0
-        @SET_RESULT
-        0;JMP
-        (IS_EQUAL)
-        D=1
-        (SET_RESULT)
-        @SP
-        A=M-1
-        M=D"""
+        return "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
 
-    @staticmethod
-    def vm_gt() -> str:
+    def vm_gt(self) -> str:
+        """
+        """
+        # 
+        return "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+
+    def vm_lt(self) -> str:
+        """
+        """
+        # 
+        return "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+
+    def vm_and(self) -> str:
         pass
 
-    @staticmethod
-    def vm_lt() -> str:
+    def vm_or(self) -> str:
         pass
 
-    @staticmethod
-    def vm_and() -> str:
-        pass
-
-    @staticmethod
-    def vm_or() -> str:
-        pass
-
-    @staticmethod
-    def vm_not() -> str:
+    def vm_not(self) -> str:
         pass
 
     # Stack-manipulating commands
 
-    @staticmethod
-    def vm_push(segment: str, address: int) -> str:
+    def vm_push(self, segment: str, address: int) -> str:
         pass
 
-    @staticmethod
-    def vm_pop(segment: str, address: int) -> str:
+    def vm_pop(self, segment: str, address: int) -> str:
         pass
 
     def write_arithmetic(self, command: str) -> None:

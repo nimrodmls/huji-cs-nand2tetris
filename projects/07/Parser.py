@@ -57,20 +57,21 @@ class Parser:
         """
         self._code = input_file.read().splitlines()
         self._current_command_index = 0
+        self._codewriter = CodeWriter()
         self._command_handlers = {
             # Arithmetic Commands
-            "add": CodeWriter.vm_add,
-            "sub": CodeWriter.vm_sub,
-            "neg": CodeWriter.vm_neg,
-            "eq": CodeWriter.vm_eq,
-            "gt": CodeWriter.vm_gt,
-            "lt": CodeWriter.vm_lt,
-            "and": CodeWriter.vm_and,
-            "or": CodeWriter.vm_or,
-            "not": CodeWriter.vm_not,
+            "add": self._codewriter.vm_add,
+            "sub": self._codewriter.vm_sub,
+            "neg": self._codewriter.vm_neg,
+            "eq": self._codewriter.vm_eq,
+            "gt": self._codewriter.vm_gt,
+            "lt": self._codewriter.vm_lt,
+            "and": self._codewriter.vm_and,
+            "or": self._codewriter.vm_or,
+            "not": self._codewriter.vm_not,
             # Stack-manipulating Commands
-            "push": lambda segment, address: CodeWriter.vm_push(segment, int(address)),
-            "pop": lambda segment, address: CodeWriter.vm_pop(segment, int(address)),
+            "push": lambda segment, address: self._codewriter.vm_push(segment, int(address)),
+            "pop": lambda segment, address: self._codewriter.vm_pop(segment, int(address)),
         }
 
     def get_next_command(self) -> Optional[str]:
