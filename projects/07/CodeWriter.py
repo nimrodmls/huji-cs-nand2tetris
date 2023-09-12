@@ -42,6 +42,54 @@ class CodeWriter:
         # input_filename, input_extension = os.path.splitext(os.path.basename(input_file.name))
         pass
 
+    # Arithmetic commands
+
+    @staticmethod
+    def vm_add() -> str:
+        pass
+
+    @staticmethod
+    def vm_sub() -> str:
+        pass
+
+    @staticmethod
+    def vm_neg() -> str:
+        pass
+
+    @staticmethod
+    def vm_eq() -> str:
+        pass
+
+    @staticmethod
+    def vm_gt() -> str:
+        pass
+
+    @staticmethod
+    def vm_lt() -> str:
+        pass
+
+    @staticmethod
+    def vm_and() -> str:
+        pass
+
+    @staticmethod
+    def vm_or() -> str:
+        pass
+
+    @staticmethod
+    def vm_not() -> str:
+        pass
+
+    # Stack-manipulating commands
+
+    @staticmethod
+    def vm_push(segment: str, address: str) -> str:
+        pass
+
+    @staticmethod
+    def vm_pop(segment: str, address: str) -> str:
+        pass
+
     def write_arithmetic(self, command: str) -> None:
         """Writes assembly code that is the translation of the given 
         arithmetic command. For the commands eq, lt, gt, you should correctly
