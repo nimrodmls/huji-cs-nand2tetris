@@ -24,17 +24,45 @@ D=1
 (SET_RESULT_{relation}_{count})
 @SP
 A=M-1
-M=D
-"""
+M=D\n"""
+
+# Hack ASM code for access to keyworded segments (e.g. local)
+# After calling this piece of code, the A register will hold
+# the address requested for the memory segment
+GET_ADDRESS_KEYWORDED_SEGMENT_ASM = \
+"""@{segment}
+D={address}
+A=D+M\n"""
 
 class CodeWriter:
     """Translates VM commands into Hack assembly code."""
 
-    def __init__(self) -> None:
-        """Initializes the CodeWriter.
+    CONSTANT_SEGMENT_NOTATION = "constant"
+    TEMP_SEGMENT_OFFSET = 5
+    STATIC_SEGMENT_OFFSET = 16
+    POINTER_SEGMENT_OFFSET = 3
 
-        Args:
-            output_stream (typing.TextIO): output stream.
+    # TODO: Rename keyworded to dynamic and nonkeyworded to static
+
+    # Translation from VM language segment keywords to
+    # Hack Assembly segment keywords
+    KEYWORDED_SEGMENTS = {
+        "local": "LCL",
+        "argument": "ARG",
+        "this": "THIS",
+        "that": "THAT"
+    }
+
+    # Handlers for all the non-keyworded segments (static addresses)
+    NONKEYWORDED_SEGMENTS = {
+        "temp": TEMP_SEGMENT_OFFSET,
+        "static": STATIC_SEGMENT_OFFSET,
+        "pointer": POINTER_SEGMENT_OFFSET
+    }
+
+    def __init__(self) -> None:
+        """
+        Initializes the CodeWriter.
         """
         # Counting the amount of (in)equalities, so labels can be set properly
         # in the asm code
@@ -106,21 +134,80 @@ class CodeWriter:
         return "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
 
     def vm_and(self) -> str:
-        pass
+        return """// and
+        @SP
+        M=M-1
+        A=M
+        D=M
+        A=A-1
+        M=D&M"""
 
     def vm_or(self) -> str:
-        pass
+        return """// and
+        @SP
+        M=M-1
+        A=M
+        D=M
+        A=A-1
+        M=D|M"""
 
     def vm_not(self) -> str:
-        pass
+        return """// neg
+        @SP
+        A=M-1
+        M=!M"""
 
     # Stack-manipulating commands
 
     def vm_push(self, segment: str, address: int) -> str:
-        pass
+        """
+        """
+        asm_code = f"// push {segment} {address}\n"
+
+        # First we wish to set the A register to the
+        # requested address within the segment, and
+        # then we set the D register to have the data
+        # we wish to push into the stack
+        if segment == CodeWriter.CONSTANT_SEGMENT_NOTATION:
+            asm_code += f"""@{address}
+            D=A\n"""
+        else:
+            asm_code += CodeWriter._generate_segment_address(segment, address) + "D=M\n"
+
+        # Placing the data we got from the memory segment into 
+        # the stack & incrementing the stack pointer, 
+        # a logic which is common to all cases
+        asm_code += """@SP
+        A=M
+        M=D
+        @SP
+        M=M+1"""
+        return asm_code
 
     def vm_pop(self, segment: str, address: int) -> str:
-        pass
+        """
+        """
+
+        
+    @staticmethod
+    def _generate_segment_address(segment: str, internal_address: int):
+        """
+        Calling this function will generate Hack ASM code which places
+        the address to the requested address within a segment in the register A
+        """
+        if segment in CodeWriter.KEYWORDED_SEGMENTS:
+            return GET_ADDRESS_KEYWORDED_SEGMENT_ASM.format(
+                segment=CodeWriter.KEYWORDED_SEGMENTS[segment], address=internal_address)
+        else:
+            return CodeWriter.handle_segment_by_offset(
+                CodeWriter.NONKEYWORDED_SEGMENTS[segment], internal_address)
+        
+    @staticmethod
+    def handle_segment_by_offset(offset: int, address: int):
+        """
+        """
+        ram_offset = offset + address
+        return f"@{ram_offset}\n"
 
     def write_arithmetic(self, command: str) -> None:
         """Writes assembly code that is the translation of the given 
