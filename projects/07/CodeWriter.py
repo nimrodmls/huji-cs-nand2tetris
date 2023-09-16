@@ -20,7 +20,7 @@ D=0
 @SET_RESULT_{relation}_{count}
 0;JMP
 (IS_TRUE_{relation}_{count})
-D=1
+D=-1
 (SET_RESULT_{relation}_{count})
 @SP
 A=M-1
@@ -95,14 +95,14 @@ class CodeWriter:
         2 numbers on the stack. Both input values are popped, and the
         result is pushed, hence the result is on top of the stack.
         """
-        # Implementation is identical to addition, only final arithmetic is changed
+        # Implementation is identical to addition, we only negate the "y" component
         return """// sub
         @SP
         M=M-1
         A=M
-        D=M
+        D=-M
         A=A-1
-        M=D-M\n"""
+        M=D+M\n"""
 
     def vm_neg(self) -> str:
         """
@@ -120,19 +120,25 @@ class CodeWriter:
         """
         """
         # 
-        return "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
+        asm_code = "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
+        self._eq_counter += 1
+        return asm_code
 
     def vm_gt(self) -> str:
         """
         """
         # 
-        return "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+        asm_code = "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+        self._gt_counter += 1
+        return asm_code
 
     def vm_lt(self) -> str:
         """
         """
         # 
-        return "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+        asm_code = "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+        self._lt_counter += 1
+        return asm_code
 
     def vm_and(self) -> str:
         return """// and
