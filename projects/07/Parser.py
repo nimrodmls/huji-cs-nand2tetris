@@ -8,7 +8,6 @@ Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 from CodeWriter import CodeWriter
 from typing import Optional, TextIO
 
-
 class Parser:
     """
     # Parser
@@ -109,52 +108,3 @@ class Parser:
             # Strip the line from everything past the comment
             current_line = current_line[:comment_index]
         return current_line
-
-    def has_more_commands(self) -> bool:
-        """Are there more commands in the input?
-
-        Returns:
-            bool: True if there are more commands, False otherwise.
-        """
-        # Your code goes here!
-        pass
-
-    def advance(self) -> None:
-        """Reads the next command from the input and makes it the current 
-        command. Should be called only if has_more_commands() is true. Initially
-        there is no current command.
-        """
-        # Your code goes here!
-        pass
-
-    def command_type(self) -> str:
-        """
-        Returns:
-            str: the type of the current VM command.
-            "C_ARITHMETIC" is returned for all arithmetic commands.
-            For other commands, can return:
-            "C_PUSH", "C_POP", "C_LABEL", "C_GOTO", "C_IF", "C_FUNCTION",
-            "C_RETURN", "C_CALL".
-        """
-        # Your code goes here!
-        pass
-
-    def arg1(self) -> str:
-        """
-        Returns:
-            str: the first argument of the current command. In case of 
-            "C_ARITHMETIC", the command itself (add, sub, etc.) is returned. 
-            Should not be called if the current command is "C_RETURN".
-        """
-        # Your code goes here!
-        pass
-
-    def arg2(self) -> int:
-        """
-        Returns:
-            int: the second argument of the current command. Should be
-            called only if the current command is "C_PUSH", "C_POP", 
-            "C_FUNCTION" or "C_CALL".
-        """
-        # Your code goes here!
-        pass
