@@ -27,7 +27,7 @@ RELATIONS_ASM = concat_asm_code(
      "@SET_RESULT_{relation}_{count}",
      "0;JMP",
      "(IS_TRUE_{relation}_{count})",
-     "D=1",
+     "D=-1",
      "(SET_RESULT_{relation}_{count})",
      "@SP",
      "A=M-1",
@@ -107,9 +107,9 @@ class CodeWriter:
             ["@SP",
              "M=M-1",
              "A=M",
-             "D=M",
+             "D=-M",
              "A=A-1",
-             "M=D-M"
+             "M=D+M"
             ])
 
     def vm_neg(self) -> str:
@@ -130,21 +130,27 @@ class CodeWriter:
         Returning Hack ASM for equality validation between the topmost 2
         items in the stack
         """
-        return "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
+        asm_code = "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
+        self._eq_counter += 1
+        return asm_code
 
     def vm_gt(self) -> str:
         """
         Returning Hack ASM for (strictly) greater-than between the
         topmost 2 items in the stack
         """
-        return "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+        asm_code = "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+        self._gt_counter += 1
+        return asm_code
 
     def vm_lt(self) -> str:
         """
         Returning the Hack ASM for (strictly) less-than between the topmost 
         2 items in the stack
         """
-        return "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+        asm_code = "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+        self._lt_counter += 1
+        return asm_code
 
     def vm_and(self) -> str:
         return "// and\n" + concat_asm_code(

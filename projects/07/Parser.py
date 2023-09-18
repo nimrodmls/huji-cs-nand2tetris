@@ -84,6 +84,7 @@ class Parser:
         # Iterating until we find a non-comment line
         ready_code = Parser._strip_comment(self._code[self._current_command_index])
         while 0 == len(ready_code):
+            self._current_command_index += 1
             ready_code = Parser._strip_comment(self._code[self._current_command_index])
         ready_code = ready_code.split()
 
