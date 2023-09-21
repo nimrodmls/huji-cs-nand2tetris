@@ -72,7 +72,7 @@ class CodeWriter:
         Initializes the CodeWriter.
         @param unique_id: Unique Identifier for labeling
         """
-        self._uid = unique_id
+        self._uid = unique_id.upper()
         # Counting the amount of (in)equalities, so labels can be set properly
         # in the asm code
         self._eq_counter = 1
@@ -246,25 +246,68 @@ class CodeWriter:
 
     def vm_label(self, name):
         """
+        Generating Hack ASM code for labeling the current location in the code
+        for jumping to it in a later stage.
         """
-        pass
+        # The code is simply an Hack ASM label
+        return f"// label {name}\n" + concat_asm_code([f"({name})"])
 
     def vm_goto(self, label_name):
         """
         """
-        pass
+        asm_code = f"// goto {label_name}\n"
+        # Loading the address to the label (assuming it was defined!)
+        # and simply jumping to it
+        asm_code += concat_asm_code([
+            f"@{label_name}",
+            "0;JMP"
+        ])
+
+        return asm_code
 
     def vm_if_goto(self, label_name):
         """
         """
-        pass
+        asm_code = f"// if-goto {label_name}\n"
+
+        # "Popping" the topmost value of the stack
+        # and using it to determine whether a jump should be
+        # performed (only upon the topmost value being nonzero)
+        asm_code += concat_asm_code([
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            f"@{label_name}",
+            "D;JNE"
+        ])
+
+        return asm_code
 
     # Function Commands
 
     def vm_function(self, name, local_var_count):
         """
         """
-        pass
+        asm_code = f"// function {name} {local_var_count}"
+        func_label = self.add_uid(name)
+
+        asm_code += concat_asm_code([
+            f"({func_label})",
+            "@R15", # We use R15 for the iteration counter of the loop
+            f"M={local_var_count}",
+            f"({func_label}_INIT_LOOP)", # Starting an initialization loop
+            "@SP", # The next few lines is a push operation of 0
+            "A=M",
+            "M=0",
+            "@SP",
+            "M=M+1",
+            "@R15", # Now we decrement the loop iteration counter
+            "M=M-1",
+            "D=M",
+            f"@{func_label}_INIT_LOOP",
+            "D;JNE" # The loop continues if and only if the iteration counter is not 0
+        ])
 
     def vm_call(self, func_name, argument_count):
         """
@@ -275,6 +318,14 @@ class CodeWriter:
         """
         """
         pass
+
+    # Utility functions
+
+    def add_uid(self, id: str) -> str:
+        """
+        Simply adding the unique identifier to the given string
+        """
+        return id + "." + self._uid
     
     @staticmethod
     def _generate_segment_address(segment: str, internal_address: int):
