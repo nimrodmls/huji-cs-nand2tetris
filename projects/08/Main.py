@@ -23,9 +23,11 @@ def translate_file(
         bootstrap (bool): if this is True, the current file is the 
             first file we are translating.
     """
-    # Your code goes here!
-    pass
-
+    parser = Parser(input_file)
+    asm_cmd = parser.get_next_command()
+    while None != asm_cmd:
+        output_file.write(asm_cmd)
+        asm_cmd = parser.get_next_command()
 
 if "__main__" == __name__:
     # Parses the input path and calls translate_file on each input file.
