@@ -14,6 +14,12 @@ def concat_asm_code(asm: List[str]) -> str:
     """
     return "\n".join(asm + [""])
 
+###################
+# Common ASM code #
+###################
+
+# Generic Hack ASM code for each of the (in)equality relations
+# given by the VM language
 RELATIONS_ASM = concat_asm_code(
     ["@SP",
      "M=M-1",
@@ -92,7 +98,9 @@ class CodeWriter:
         # for each return address of each call
         self._call_count = 1
 
-    # Arithmetic commands
+    #######################
+    # Arithmetic commands #
+    #######################
 
     def vm_add(self) -> str:
         """
@@ -197,7 +205,9 @@ class CodeWriter:
              "M=!M"
             ])
 
-    # Stack-manipulating commands
+    ###############################
+    # Stack-manipulating commands #
+    ###############################
 
     def vm_push(self, segment: str, address: int) -> str:
         """
@@ -250,7 +260,9 @@ class CodeWriter:
                      "M=D"])
         return asm_code
  
-    # Branching Commands
+    ######################
+    # Branching Commands #
+    ######################
 
     def vm_label(self, name: str):
         """
@@ -292,12 +304,14 @@ class CodeWriter:
 
         return asm_code
 
-    # Function Commands
+    #####################
+    # Function Commands #
+    #####################
 
     def vm_function(self, name: str, local_var_count: int):
         """
         """
-        asm_code = f"// function {name} {local_var_count}"
+        asm_code = f"// function {name} {local_var_count}\n"
         func_label = self.add_uid(name.upper())
 
         asm_code += concat_asm_code([
@@ -322,7 +336,7 @@ class CodeWriter:
     def vm_call(self, func_name: str, argument_count: int):
         """
         """
-        asm_code = f"// call {func_name} {argument_count}"
+        asm_code = f"// call {func_name} {argument_count}\n"
         func_label = self.add_uid(func_name.upper())
         
         # Generic Hack ASM code for pushing a Dynamic Segment's Address
@@ -343,6 +357,7 @@ class CodeWriter:
             "D=A" # We place the return address in the D register
         ]) + GENERIC_PUSH_D_REGISTER_ASM
 
+        # Pushing all the segment addresses
         asm_code += push_dynamic_segment_address_asm.format(segment="LCL")
         asm_code += push_dynamic_segment_address_asm.format(segment="ARG")
         asm_code += push_dynamic_segment_address_asm.format(segment="THIS")
@@ -381,9 +396,71 @@ class CodeWriter:
     def vm_return(self):
         """
         """
-        pass
+        asm_code = "// return\n"
 
-    # Utility functions
+        # Storing the end of the call frame in R15
+        asm_code += concat_asm_code([
+            "@LCL",
+            "D=M",
+            "@R15",
+            "M=D"
+        ])
+
+        # Giving the return value to the caller (by "replacing" all the arguments)
+        # the caller had given to the function, with the return value
+        asm_code += concat_asm_code([
+            "@SP",
+            "A=M-1",
+            "D=M",
+            "@ARG",
+            "A=M",
+            "M=D",
+        ])
+
+        # Repositioning the stack pointer to be just after the return value
+        # we just set in the code above
+        asm_code += concat_asm_code([
+            "@ARG",
+            "D=M+1",
+            "@SP",
+            "M=D"
+        ])
+
+        # Generic Hack ASM code for getting data from a certain offset within the call frame
+        get_data_from_frame_asm = concat_asm_code([
+            "@R15", # R15 holds the ptr to the END of the frame
+            "D=M",
+            "@{offset}",
+            "A=D-A", # Going to where the previous segment address is stored
+            "D=M", # Storing the ptr to the segment in D
+        ])
+
+        # Generic Hack ASM code for restoring a segment address from a call frame
+        restore_segment_ptr_from_frame_asm = get_data_from_frame_asm + concat_asm_code([
+            "@{segment}",
+            "M=D" # This actually restores the segment ptr with D
+        ])
+
+        # Restoring all segment addresses from the call frame
+        asm_code += restore_segment_ptr_from_frame_asm.format(offset=1, segment="THAT")
+        asm_code += restore_segment_ptr_from_frame_asm.format(offset=2, segment="THIS")
+        asm_code += restore_segment_ptr_from_frame_asm.format(offset=3, segment="ARG")
+        asm_code += restore_segment_ptr_from_frame_asm.format(offset=4, segment="LCL")
+
+        # Jumping to the return address unconditionally
+        # NOTE: It is possible to optimize this code, since get_data_from_frame_asm
+        #       does D=M and then here we do A=D, can be simplified to A=M,
+        #       but it is left this way in the sake of simplicity of this Python code
+        asm_code += get_data_from_frame_asm.format(offset=5) + concat_asm_code([
+            "A=D",
+            "0;JMP"
+        ])
+
+        return asm_code
+
+    #####################
+    # Utility functions #
+    #####################
 
     def add_uid(self, id: str) -> str:
         """
