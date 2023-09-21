@@ -44,6 +44,16 @@ GET_DYNAMIC_SEGMENT_ADDR_ASM = concat_asm_code(
     "A=D+M"
 ])
 
+# Generic Hack ASM code for pushing the 
+# value within the D register into the stack
+GENERIC_PUSH_D_REGISTER_ASM = concat_asm_code([
+    "@SP",
+    "A=M",
+    "M=D",
+    "@SP",
+    "M=M+1"
+])
+
 class CodeWriter:
     """Translates VM commands into Hack assembly code."""
 
@@ -78,6 +88,9 @@ class CodeWriter:
         self._eq_counter = 1
         self._lt_counter = 1
         self._gt_counter = 1
+        # Counting the amount of calls, so labels can be set properly
+        # for each return address of each call
+        self._call_count = 1
 
     # Arithmetic commands
 
@@ -208,12 +221,7 @@ class CodeWriter:
         # (which, as we did in the previous stage, is in the D register)
         # into the stack & incrementing the stack pointer, 
         # a logic which is common to all cases
-        asm_code += concat_asm_code(
-            ["@SP",
-             "A=M",
-             "M=D",
-             "@SP",
-             "M=M+1"])
+        asm_code += GENERIC_PUSH_D_REGISTER_ASM
         return asm_code
 
     def vm_pop(self, segment: str, address: int) -> str:
@@ -244,7 +252,7 @@ class CodeWriter:
  
     # Branching Commands
 
-    def vm_label(self, name):
+    def vm_label(self, name: str):
         """
         Generating Hack ASM code for labeling the current location in the code
         for jumping to it in a later stage.
@@ -252,7 +260,7 @@ class CodeWriter:
         # The code is simply an Hack ASM label
         return f"// label {name}\n" + concat_asm_code([f"({name})"])
 
-    def vm_goto(self, label_name):
+    def vm_goto(self, label_name: str):
         """
         """
         asm_code = f"// goto {label_name}\n"
@@ -265,7 +273,7 @@ class CodeWriter:
 
         return asm_code
 
-    def vm_if_goto(self, label_name):
+    def vm_if_goto(self, label_name: str):
         """
         """
         asm_code = f"// if-goto {label_name}\n"
@@ -286,11 +294,11 @@ class CodeWriter:
 
     # Function Commands
 
-    def vm_function(self, name, local_var_count):
+    def vm_function(self, name: str, local_var_count: int):
         """
         """
         asm_code = f"// function {name} {local_var_count}"
-        func_label = self.add_uid(name)
+        func_label = self.add_uid(name.upper())
 
         asm_code += concat_asm_code([
             f"({func_label})",
@@ -309,10 +317,66 @@ class CodeWriter:
             "D;JNE" # The loop continues if and only if the iteration counter is not 0
         ])
 
-    def vm_call(self, func_name, argument_count):
+        return asm_code
+
+    def vm_call(self, func_name: str, argument_count: int):
         """
         """
-        pass
+        asm_code = f"// call {func_name} {argument_count}"
+        func_label = self.add_uid(func_name.upper())
+        
+        # Generic Hack ASM code for pushing a Dynamic Segment's Address
+        # into the stack (as the regular vm_push is using segment names)
+        push_dynamic_segment_address_asm = concat_asm_code([
+            "@{segment}", 
+            "D=M", # Getting the segment address and place it in D register
+        ]) + GENERIC_PUSH_D_REGISTER_ASM
+
+        # Now we begin to push everything we need onto the stack
+        # First we push the return address 
+        # (it is labeled, for example - RET_FOO.BAR_1, 
+        # with FOO being the function name, BAR the file name, 
+        # and 1 the call count e.g. how many calls preceeded in this file)
+        return_label = f"@RET_{func_label}_{self._call_count}"
+        asm_code += concat_asm_code([
+            f"@{return_label}",
+            "D=A" # We place the return address in the D register
+        ]) + GENERIC_PUSH_D_REGISTER_ASM
+
+        asm_code += push_dynamic_segment_address_asm.format(segment="LCL")
+        asm_code += push_dynamic_segment_address_asm.format(segment="ARG")
+        asm_code += push_dynamic_segment_address_asm.format(segment="THIS")
+        asm_code += push_dynamic_segment_address_asm.format(segment="THAT")
+
+        # Setting the new ARG to point on the stack 
+        # where we were BEFORE pushing the frame
+        asm_code += concat_asm_code([
+            "@SP",
+            "D=M", # D contains the stack pointer
+            "@5",
+            "D=D-A", # Now we calculate SP-5 (which is D-5)
+            f"@{argument_count}",
+            "D=D-A", # Now we calculate SP-5-nArgs
+            "@ARG", # Setting ARG as needed
+            "M=D",
+        ])
+
+        # Setting the local segment ptr to the current stack pointer
+        asm_code += concat_asm_code([
+            "@SP",
+            "D=M",
+            "@LCL",
+            "M=D",
+        ])
+
+        # Jumping to the function unconditionally, and setting the return label
+        asm_code += concat_asm_code([
+            f"@{func_label}",
+            "0;JMP",
+            f"({return_label})"
+        ])
+
+        return asm_code
 
     def vm_return(self):
         """
