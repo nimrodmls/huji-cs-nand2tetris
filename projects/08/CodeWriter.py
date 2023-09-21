@@ -242,6 +242,40 @@ class CodeWriter:
                      "M=D"])
         return asm_code
  
+    # Branching Commands
+
+    def vm_label(self, name):
+        """
+        """
+        pass
+
+    def vm_goto(self, label_name):
+        """
+        """
+        pass
+
+    def vm_if_goto(self, label_name):
+        """
+        """
+        pass
+
+    # Function Commands
+
+    def vm_function(self, name, local_var_count):
+        """
+        """
+        pass
+
+    def vm_call(self, func_name, argument_count):
+        """
+        """
+        pass
+
+    def vm_return(self):
+        """
+        """
+        pass
+    
     @staticmethod
     def _generate_segment_address(segment: str, internal_address: int):
         """

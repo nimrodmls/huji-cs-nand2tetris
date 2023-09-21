@@ -76,6 +76,14 @@ class Parser:
             # Stack-manipulating Commands
             "push": lambda segment, address: self._codewriter.vm_push(segment, int(address)),
             "pop": lambda segment, address: self._codewriter.vm_pop(segment, int(address)),
+            # Branching Commands
+            "label": self._codewriter.vm_label,
+            "goto": self._codewriter.vm_goto,
+            "if-goto": self._codewriter.vm_if_goto,
+            # Function Commands
+            "function": lambda name, var_count: self._codewriter.vm_function(name, var_count),
+            "call": lambda name, var_count: self._codewriter.vm_call(name, var_count),
+            "return": self._codewriter.vm_return
         }
 
     def get_next_command(self) -> Optional[str]:
