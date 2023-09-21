@@ -21,14 +21,14 @@ RELATIONS_ASM = concat_asm_code(
      "D=M",
      "A=A-1",
      "D=D-M",
-     "@IS_TRUE_{relation}_{count}",
+     "@IS_TRUE_{relation}_{uid}_{count}",
      "D;{relation}",
      "D=0",
-     "@SET_RESULT_{relation}_{count}",
+     "@SET_RESULT_{relation}_{uid}_{count}",
      "0;JMP",
-     "(IS_TRUE_{relation}_{count})",
+     "(IS_TRUE_{relation}_{uid}_{count})",
      "D=-1",
-     "(SET_RESULT_{relation}_{count})",
+     "(SET_RESULT_{relation}_{uid}_{count})",
      "@SP",
      "A=M-1",
      "M=D"
@@ -67,10 +67,12 @@ class CodeWriter:
         "pointer": 3
     }
 
-    def __init__(self) -> None:
+    def __init__(self, unique_id: str) -> None:
         """
         Initializes the CodeWriter.
+        @param unique_id: Unique Identifier for labeling
         """
+        self._uid = unique_id
         # Counting the amount of (in)equalities, so labels can be set properly
         # in the asm code
         self._eq_counter = 1
@@ -130,7 +132,8 @@ class CodeWriter:
         Returning Hack ASM for equality validation between the topmost 2
         items in the stack
         """
-        asm_code = "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
+        asm_code = "// eq\n" + RELATIONS_ASM.format(
+            relation="JEQ", uid=self._uid, count=self._eq_counter)
         self._eq_counter += 1
         return asm_code
 
@@ -139,7 +142,8 @@ class CodeWriter:
         Returning Hack ASM for (strictly) greater-than between the
         topmost 2 items in the stack
         """
-        asm_code = "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+        asm_code = "// gt\n" + RELATIONS_ASM.format(
+            relation="JLT", uid=self._uid, count=self._gt_counter)
         self._gt_counter += 1
         return asm_code
 
@@ -148,7 +152,8 @@ class CodeWriter:
         Returning the Hack ASM for (strictly) less-than between the topmost 
         2 items in the stack
         """
-        asm_code = "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+        asm_code = "// lt\n" + RELATIONS_ASM.format(
+            relation="JGT", uid=self._uid, count=self._lt_counter)
         self._lt_counter += 1
         return asm_code
 

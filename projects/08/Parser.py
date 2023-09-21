@@ -5,6 +5,7 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+import os
 from CodeWriter import CodeWriter
 from typing import Optional, TextIO
 
@@ -56,7 +57,11 @@ class Parser:
         """
         self._code = input_file.read().splitlines()
         self._current_command_index = 0
-        self._codewriter = CodeWriter()
+        # Creating the code writer for this file, the unique ID
+        # for labels of the corresponding ASM would be the name
+        # of the VM file
+        self._codewriter = CodeWriter(
+            os.path.splitext(os.path.basename(input_file.name))[0])
         self._command_handlers = {
             # Arithmetic Commands
             "add": self._codewriter.vm_add,
@@ -98,10 +103,18 @@ class Parser:
         # The first element of ready_code is the VM command,
         # hence we get the proper handler for it, and call it
         return self._command_handlers[ready_code[0]](*ready_code[1:])
+    
+    @staticmethod
+    def get_bootstrap_code() -> str:
+        """
+        Generating the generic bootstrap code
+        """
+        pass
 
     @staticmethod
     def _strip_comment(code_line: str) -> str:
         """
+        Stripping the comment from the given line of code
         """
         current_line = code_line
         comment_index = current_line.find(Parser.COMMENT_NOTATION)
