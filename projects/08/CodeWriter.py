@@ -406,6 +406,9 @@ class CodeWriter:
             f"({return_label})"
         ])
 
+        # Incrementing the call count in order to allow multiple calls to the same function(s)
+        self._call_count += 1
+
         return asm_code
 
     def vm_return(self):
