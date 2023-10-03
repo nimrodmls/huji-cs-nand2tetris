@@ -7,7 +7,9 @@ def main():
     directories = ["FunctionCalls\\FibonacciElement",
                    "FunctionCalls\\NestedCall",
                    "FunctionCalls\\SimpleFunction",
-                   "FunctionCalls\\StaticsTest"]
+                   "FunctionCalls\\StaticsTest",
+                   "ProgramFlow\\FibonacciSeries",
+                   "ProgramFlow\\BasicLoop"]
     for directory in directories:
         Main.main(os.path.join(base_path, directory))
 
