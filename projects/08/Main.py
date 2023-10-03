@@ -35,15 +35,14 @@ def translate_file(
         output_file.write(asm_cmd)
         asm_cmd = parser.get_next_command()
 
-if "__main__" == __name__:
+def main(in_path):
     # Parses the input path and calls translate_file on each input file.
     # This opens both the input and the output files!
     # Both are closed automatically when the code finishes running.
     # If the output file does not exist, it is created automatically in the
     # correct path, using the correct filename.
-    if not len(sys.argv) == 2:
-        sys.exit("Invalid usage, please use: VMtranslator <input path>")
-    argument_path = os.path.abspath(sys.argv[1])
+
+    argument_path = os.path.abspath(in_path)
     if os.path.isdir(argument_path):
         files_to_translate = [
             os.path.join(argument_path, filename)
@@ -63,3 +62,8 @@ if "__main__" == __name__:
             with open(input_path, 'r') as input_file:
                 translate_file(input_file, output_file, bootstrap)
             bootstrap = False
+
+if "__main__" == __name__:
+    if not len(sys.argv) == 2:
+        sys.exit("Invalid usage, please use: VMtranslator <input path>")
+    main(sys.argv[1])

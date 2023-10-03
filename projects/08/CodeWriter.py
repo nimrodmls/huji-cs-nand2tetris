@@ -98,6 +98,16 @@ class CodeWriter:
         # for each return address of each call
         self._call_count = 1
 
+    def vm_bootstrap(self) -> str:
+        """
+        """
+        return "// VM Bootstrap\n" + concat_asm_code([
+            "@256",
+            "D=A",
+            "@SP",
+            "M=D"
+        ]) + self.vm_call("Sys.init", 0)
+
     #######################
     # Arithmetic commands #
     #######################
@@ -312,12 +322,14 @@ class CodeWriter:
         """
         """
         asm_code = f"// function {name} {local_var_count}\n"
-        func_label = self.add_uid(name.upper())
+        func_label = name.upper() # self.add_uid(name.upper())
 
         asm_code += concat_asm_code([
             f"({func_label})",
+            f"@{local_var_count}",
+            "D=A",
             "@R15", # We use R15 for the iteration counter of the loop
-            f"M={local_var_count}",
+            f"M=D",
             f"({func_label}_INIT_LOOP)", # Starting an initialization loop
             "@SP", # The next few lines is a push operation of 0
             "A=M",
@@ -337,7 +349,7 @@ class CodeWriter:
         """
         """
         asm_code = f"// call {func_name} {argument_count}\n"
-        func_label = self.add_uid(func_name.upper())
+        func_label = func_name.upper() # self.add_uid(func_name.upper())
         
         # Generic Hack ASM code for pushing a Dynamic Segment's Address
         # into the stack (as the regular vm_push is using segment names)
@@ -351,7 +363,7 @@ class CodeWriter:
         # (it is labeled, for example - RET_FOO.BAR_1, 
         # with FOO being the function name, BAR the file name, 
         # and 1 the call count e.g. how many calls preceeded in this file)
-        return_label = f"@RET_{func_label}_{self._call_count}"
+        return_label = f"RET_{func_label}_{self._call_count}"
         asm_code += concat_asm_code([
             f"@{return_label}",
             "D=A" # We place the return address in the D register

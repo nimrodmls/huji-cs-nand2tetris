@@ -112,12 +112,11 @@ class Parser:
         # hence we get the proper handler for it, and call it
         return self._command_handlers[ready_code[0]](*ready_code[1:])
     
-    @staticmethod
-    def get_bootstrap_code() -> str:
+    def get_bootstrap_code(self) -> str:
         """
         Generating the generic bootstrap code
         """
-        pass
+        return self._codewriter.vm_bootstrap()
 
     @staticmethod
     def _strip_comment(code_line: str) -> str:
