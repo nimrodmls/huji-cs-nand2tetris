@@ -25,6 +25,9 @@ def translate_file(
     """
     parser = Parser(input_file)
     
+    # Adding the name of the file to the beginning of the ASM sequence
+    output_file.write(f"// {os.path.basename(input_file.name)}\n")
+
     # First, if bootstrap code is required, we call it
     if bootstrap:
         output_file.write(parser.get_bootstrap_code())

@@ -64,6 +64,7 @@ class CodeWriter:
     """Translates VM commands into Hack assembly code."""
 
     CONSTANT_SEGMENT_NOTATION = "constant"
+    STATIC_SEGMENT_NOTATION = "static"
 
     # Translating the name of each Dynamic Segment in 
     # VM language to the keyword of its address location
@@ -79,7 +80,6 @@ class CodeWriter:
     # to its proper offset within the computer memory.
     FIXED_SEGMENTS_OFFSETS = {
         "temp": 5,
-        "static": 16,
         "pointer": 3
     }
 
@@ -235,7 +235,7 @@ class CodeWriter:
                 [f"@{address}",
                  "D=A"])
         else:
-            asm_code += CodeWriter._generate_segment_address(segment, address) + "D=M\n"
+            asm_code += self._generate_segment_address(segment, address) + "D=M\n"
 
         # Placing the data we got from the memory segment 
         # (which, as we did in the previous stage, is in the D register)
@@ -252,7 +252,7 @@ class CodeWriter:
         # First we let A register hold the address to the location
         # which we want to pop into
         asm_code = f"// pop {segment} {address}\n" + \
-                   CodeWriter._generate_segment_address(segment, address)
+                   self._generate_segment_address(segment, address)
         
         # Here we save the address to the location we want to pop into (in R15)
         # and then we manipulate the SP, save the value in the stack, and
@@ -322,26 +322,29 @@ class CodeWriter:
         """
         """
         asm_code = f"// function {name} {local_var_count}\n"
-        func_label = name.upper() # self.add_uid(name.upper())
 
-        asm_code += concat_asm_code([
-            f"({func_label})",
-            f"@{local_var_count}",
-            "D=A",
-            "@R15", # We use R15 for the iteration counter of the loop
-            f"M=D",
-            f"({func_label}_INIT_LOOP)", # Starting an initialization loop
-            "@SP", # The next few lines is a push operation of 0
-            "A=M",
-            "M=0",
-            "@SP",
-            "M=M+1",
-            "@R15", # Now we decrement the loop iteration counter
-            "M=M-1",
-            "D=M",
-            f"@{func_label}_INIT_LOOP",
-            "D;JNE" # The loop continues if and only if the iteration counter is not 0
-        ])
+        func_label = name.upper() # self.add_uid(name.upper())
+        asm_code += f"({func_label})\n"
+
+        if 0 < local_var_count:
+            asm_code += concat_asm_code([
+                f"({func_label})",
+                f"@{local_var_count}",
+                "D=A",
+                "@R15", # We use R15 for the iteration counter of the loop
+                f"M=D",
+                f"({func_label}_INIT_LOOP)", # Starting an initialization loop
+                "@SP", # The next few lines is a push operation of 0
+                "A=M",
+                "M=0",
+                "@SP",
+                "M=M+1",
+                "@R15", # Now we decrement the loop iteration counter
+                "M=M-1",
+                "D=M",
+                f"@{func_label}_INIT_LOOP",
+                "D;JNE" # The loop continues if and only if the iteration counter is not 0
+            ])
 
         return asm_code
 
@@ -408,6 +411,16 @@ class CodeWriter:
     def vm_return(self):
         """
         """
+        # Generic Hack ASM code for getting data from a certain offset within the call frame,
+        # the data is then put into the D register
+        get_data_from_frame_asm = concat_asm_code([
+            "@R15", # R15 holds the ptr to the END of the frame
+            "D=M",
+            "@{offset}",
+            "A=D-A", # Going to where the previous segment address is stored
+            "D=M", # Storing the ptr to the segment in D
+        ])
+
         asm_code = "// return\n"
 
         # Storing the end of the call frame in R15
@@ -415,6 +428,14 @@ class CodeWriter:
             "@LCL",
             "D=M",
             "@R15",
+            "M=D"
+        ])
+
+        # Storing the return address into R14. If this not done here, then
+        # in case no arguments are passed to the function, the return value
+        # will overrun the return address, causing returning to invalid location
+        asm_code += get_data_from_frame_asm.format(offset=5) + concat_asm_code([
+            "@R14",
             "M=D"
         ])
 
@@ -438,15 +459,6 @@ class CodeWriter:
             "M=D"
         ])
 
-        # Generic Hack ASM code for getting data from a certain offset within the call frame
-        get_data_from_frame_asm = concat_asm_code([
-            "@R15", # R15 holds the ptr to the END of the frame
-            "D=M",
-            "@{offset}",
-            "A=D-A", # Going to where the previous segment address is stored
-            "D=M", # Storing the ptr to the segment in D
-        ])
-
         # Generic Hack ASM code for restoring a segment address from a call frame
         restore_segment_ptr_from_frame_asm = get_data_from_frame_asm + concat_asm_code([
             "@{segment}",
@@ -463,8 +475,9 @@ class CodeWriter:
         # NOTE: It is possible to optimize this code, since get_data_from_frame_asm
         #       does D=M and then here we do A=D, can be simplified to A=M,
         #       but it is left this way in the sake of simplicity of this Python code
-        asm_code += get_data_from_frame_asm.format(offset=5) + concat_asm_code([
-            "A=D",
+        asm_code += concat_asm_code([
+            "@R14",
+            "A=M",
             "0;JMP"
         ])
 
@@ -480,8 +493,7 @@ class CodeWriter:
         """
         return id + "." + self._uid
     
-    @staticmethod
-    def _generate_segment_address(segment: str, internal_address: int):
+    def _generate_segment_address(self, segment: str, internal_address: int) -> str:
         """
         Calling this function will generate Hack ASM code which places
         the address to the requested address within a segment in the register A
@@ -490,13 +502,19 @@ class CodeWriter:
         # note that dynamic and fixed each have different ASM code
         if segment in CodeWriter.DYNAMIC_SEGMENTS_MAPPING:
             return GET_DYNAMIC_SEGMENT_ADDR_ASM.format(
-                segment=CodeWriter.DYNAMIC_SEGMENTS_MAPPING[segment], address=internal_address)
+                segment=CodeWriter.DYNAMIC_SEGMENTS_MAPPING[segment], 
+                address=internal_address)
+        # Static segment is a special case
+        elif CodeWriter.STATIC_SEGMENT_NOTATION == segment:
+            return concat_asm_code([
+                f"@{self._uid}.STATIC_VAR.{internal_address}"
+            ])
         else: # Fixed Segments
             return CodeWriter._generate_address_by_offset(
                 CodeWriter.FIXED_SEGMENTS_OFFSETS[segment], internal_address)
         
     @staticmethod
-    def _generate_address_by_offset(offset: int, address: int):
+    def _generate_address_by_offset(offset: int, address: int) -> str:
         """
         Generates the ASM code for accessing the data at the 
         given address, at the specified offset.

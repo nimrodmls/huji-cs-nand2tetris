@@ -81,8 +81,8 @@ class Parser:
             "goto": self._codewriter.vm_goto,
             "if-goto": self._codewriter.vm_if_goto,
             # Function Commands
-            "function": lambda name, var_count: self._codewriter.vm_function(name, var_count),
-            "call": lambda name, var_count: self._codewriter.vm_call(name, var_count),
+            "function": lambda name, var_count: self._codewriter.vm_function(name, int(var_count)),
+            "call": lambda name, var_count: self._codewriter.vm_call(name, int(var_count)),
             "return": self._codewriter.vm_return
         }
 
