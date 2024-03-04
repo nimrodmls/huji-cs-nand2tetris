@@ -5,7 +5,9 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+import re
 import typing
+from typing import List
 
 
 class JackTokenizer:
@@ -41,7 +43,7 @@ class JackTokenizer:
               '-' | '*' | '/' | '&' | '|' | '<' | '>' | '=' | '~' | '^' | '#'
     - integerConstant: A decimal number in the range 0-32767.
     - StringConstant: '"' A sequence of Unicode characters not including 
-                      double quote or newline '"'
+                      double quote or newline '"' 
     - identifier: A sequence of letters, digits, and underscore ('_') not 
                   starting with a digit. You can assume keywords cannot be
                   identifiers, so 'self' cannot be an identifier, etc'.
@@ -91,6 +93,16 @@ class JackTokenizer:
     
     Note that ^, # correspond to shiftleft and shiftright, respectively.
     """
+    SYMBOLS = ['{', '}', '(', ')', '[', ']', '.', ',', ';', '+',
+               '-', '*', '/', '&', '|', '<', '>', '=', '~', '^', '#']
+    
+    KEYWORDS = ['class', 'constructor', 'function', 'method', 'field', 
+               'static', 'var', 'int', 'char', 'boolean', 'void', 'true',
+               'false', 'null', 'this', 'let', 'do', 'if', 'else', 
+               'while', 'return']
+    
+    MIN_INT = 0
+    MAX_INT = 32767
 
     def __init__(self, input_stream: typing.TextIO) -> None:
         """Opens the input stream and gets ready to tokenize it.
@@ -98,10 +110,24 @@ class JackTokenizer:
         Args:
             input_stream (typing.TextIO): input stream.
         """
-        # Your code goes here!
-        # A good place to start is to read all the lines of the input:
-        # input_lines = input_stream.read().splitlines()
-        pass
+        raw_code = JackTokenizer._strip_all_comments(input_stream.read())
+
+        # Replace all string constants with a unique identifier
+        self._string_ids = {}
+        strings_pattern = re.compile('\"(.*?)\"')
+        for idx, match in enumerate(re.findall(strings_pattern, raw_code)):
+            str_id = self._generate_string_uid(idx, raw_code)
+            raw_code = raw_code.replace('"'+match+'"', str_id)
+            self._string_ids[str_id] = match
+
+        # Split the code into tokens - based on symbols, whitespaces, and string constants
+        raw_code = raw_code.split()
+        symbols_pattern = re.compile("(" + "|".join(["\\"+sym for sym in JackTokenizer.SYMBOLS]) + ")")
+        self._code = []
+        for item in raw_code:            
+            self._code += [elem for elem in symbols_pattern.split(item) if elem]
+        
+        self._current_token_idx = 0
 
     def has_more_tokens(self) -> bool:
         """Do we have more tokens in the input?
@@ -109,16 +135,14 @@ class JackTokenizer:
         Returns:
             bool: True if there are more tokens, False otherwise.
         """
-        # Your code goes here!
-        pass
+        return self._current_token_idx < len(self._code) - 1
 
     def advance(self) -> None:
         """Gets the next token from the input and makes it the current token. 
         This method should be called if has_more_tokens() is true. 
         Initially there is no current token.
         """
-        # Your code goes here!
-        pass
+        self._current_token_idx += 1
 
     def token_type(self) -> str:
         """
@@ -126,8 +150,18 @@ class JackTokenizer:
             str: the type of the current token, can be
             "KEYWORD", "SYMBOL", "IDENTIFIER", "INT_CONST", "STRING_CONST"
         """
-        # Your code goes here!
-        pass
+        current_token = self._code[self._current_token_idx]
+        if current_token in JackTokenizer.KEYWORDS:
+            return "KEYWORD"
+        if current_token in JackTokenizer.SYMBOLS:
+            return "SYMBOL"
+        if current_token.isdigit() and \
+           (JackTokenizer.MIN_INT <= int(current_token) <= JackTokenizer.MAX_INT):
+            return "INT_CONST"
+        if current_token in self._string_ids:
+            return "STRING_CONST"
+        
+        return "IDENTIFIER"
 
     def keyword(self) -> str:
         """
@@ -188,3 +222,37 @@ class JackTokenizer:
         """
         # Your code goes here!
         pass
+
+    def _generate_string_uid(self, idx: int, raw_code: List[str]) -> str:
+        """
+        Generates a unique identifier for a string constant.
+        Makes sure that the UID doesn't appear in the raw code before 
+        assigning it. This is highly unlikely, but still possible.
+        :param idx: The index of the string constant.
+        :param raw_code: The raw code.
+        :return: A unique identifier for the string constant.
+        """
+        uid = f"STRING_CONST_{idx}"
+        while uid in raw_code:
+            idx += 1
+            uid = f"STRING_CONST_{idx}"
+        return uid
+
+    @staticmethod
+    def _strip_all_comments(code):
+        """
+        Removes all comments from the code.
+        :param code: The code to remove comments from.
+        :return: The code without comments.
+        """
+        # Regex pattern for /* */ and // comments
+        pattern = r"\/\*.*?\*\/|\/\/.*?$"
+        code = re.sub(pattern, "", code, flags=re.DOTALL | re.MULTILINE)
+        return code
+    
+
+if __name__ == "__main__":
+    a=JackTokenizer(open("Square\\Main.jack"))
+    while a.has_more_tokens():
+        print(f"Token type: {a.token_type()}, Token: {a._code[a._current_token_idx]}")
+        a.advance()
