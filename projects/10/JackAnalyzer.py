@@ -20,12 +20,10 @@ def analyze_file(
         input_file (typing.TextIO): the file to analyze.
         output_file (typing.TextIO): writes all output to this file.
     """
-    # Your code goes here!
-    # It might be good to start by creating a new JackTokenizer and CompilationEngine:
-    # tokenizer = JackTokenizer(input_file)
-    # engine = CompilationEngine(tokenizer, output_file)
-    pass
-
+    tokenizer = JackTokenizer(input_file)
+    engine = CompilationEngine(tokenizer, output_file)
+    engine.compile_class()
+    engine.finalize()
 
 if "__main__" == __name__:
     # Parses the input path and calls analyze_file on each input file.
@@ -48,5 +46,5 @@ if "__main__" == __name__:
             continue
         output_path = filename + ".xml"
         with open(input_path, 'r') as input_file, \
-                open(output_path, 'w') as output_file:
+                open(output_path, 'wb') as output_file:
             analyze_file(input_file, output_file)

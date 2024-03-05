@@ -172,8 +172,9 @@ class JackTokenizer:
             "BOOLEAN", "CHAR", "VOID", "VAR", "STATIC", "FIELD", "LET", "DO", 
             "IF", "ELSE", "WHILE", "RETURN", "TRUE", "FALSE", "NULL", "THIS"
         """
-        # Your code goes here!
-        pass
+        if 'KEYWORD' != self.token_type():
+            raise ValueError(f"JackTokenizer: Token type is not KEYWORD, it is {self.token_type()}")
+        return self._current_token()
 
     def symbol(self) -> str:
         """
@@ -184,8 +185,9 @@ class JackTokenizer:
             symbol: '{' | '}' | '(' | ')' | '[' | ']' | '.' | ',' | ';' | '+' | 
               '-' | '*' | '/' | '&' | '|' | '<' | '>' | '=' | '~' | '^' | '#'
         """
-        # Your code goes here!
-        pass
+        if 'SYMBOL' != self.token_type():
+            raise ValueError(f"JackTokenizer: Token type is not SYMBOL, it is {self.token_type()}")
+        return self._current_token()
 
     def identifier(self) -> str:
         """
@@ -197,8 +199,9 @@ class JackTokenizer:
                   starting with a digit. You can assume keywords cannot be
                   identifiers, so 'self' cannot be an identifier, etc'.
         """
-        # Your code goes here!
-        pass
+        if 'IDENTIFIER' != self.token_type():
+            raise ValueError(f"JackTokenizer: Token type is not IDENTIFIER, it is {self.token_type()}")
+        return self._current_token()
 
     def int_val(self) -> int:
         """
@@ -208,8 +211,9 @@ class JackTokenizer:
             Recall that integerConstant was defined in the grammar like so:
             integerConstant: A decimal number in the range 0-32767.
         """
-        # Your code goes here!
-        pass
+        if 'INT_CONST' != self.token_type():
+            raise ValueError(f"JackTokenizer: Token type is not INT_CONST, it is {self.token_type()}")
+        return int(self._current_token())
 
     def string_val(self) -> str:
         """
@@ -220,14 +224,22 @@ class JackTokenizer:
             StringConstant: '"' A sequence of Unicode characters not including 
                       double quote or newline '"'
         """
-        # Your code goes here!
-        pass
+        if 'STRING_CONST' != self.token_type():
+            raise ValueError(f"JackTokenizer: Token type is not STRING_CONST, it is {self.token_type()}")
+        return self._string_ids[self._current_token()]
+
+    def _current_token(self) -> str:
+        """
+        :return: The current token in the code.
+        """
+        return self._code[self._current_token_idx]
 
     def _generate_string_uid(self, idx: int, raw_code: List[str]) -> str:
         """
         Generates a unique identifier for a string constant.
         Makes sure that the UID doesn't appear in the raw code before 
         assigning it. This is highly unlikely, but still possible.
+
         :param idx: The index of the string constant.
         :param raw_code: The raw code.
         :return: A unique identifier for the string constant.
