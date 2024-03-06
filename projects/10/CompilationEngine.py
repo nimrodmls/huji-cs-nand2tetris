@@ -14,8 +14,8 @@ class JackSymbols:
     """
     OPENING_CURLY_BRACKET = "{"
     CLOSING_CURLY_BRACKET = "}"
-    OPENING_ROUND_BRACKET = "("
-    CLOSING_ROUND_BRACKET = ")"
+    OPENING_PARENTHESIS = "("
+    CLOSING_PARENTHESIS = ")"
     OPENING_SQUARE_BRACKET = "["
     CLOSING_SQUARE_BRACKET = "]"
     DOT = "."
@@ -33,7 +33,7 @@ class JackSymbols:
     TILDE = "~"
     SHIFT_RIGHT = "#"
     SHIFT_LEFT = "^"
-    ALL = [OPENING_CURLY_BRACKET, CLOSING_CURLY_BRACKET, OPENING_ROUND_BRACKET, CLOSING_ROUND_BRACKET,
+    ALL = [OPENING_CURLY_BRACKET, CLOSING_CURLY_BRACKET, OPENING_PARENTHESIS, CLOSING_PARENTHESIS,
            OPENING_SQUARE_BRACKET, CLOSING_SQUARE_BRACKET, DOT, COMMA, LINE_TERMINATOR, PLUS, MINUS,
            ASTERISK, SLASH, AMPERSAND, PIPE, LESS_THAN, GREATER_THAN, EQUALS, TILDE, SHIFT_RIGHT, SHIFT_LEFT]
 
@@ -233,7 +233,7 @@ class CompilationEngine:
 
         # We expect a closing parenthesis or a comma after the parameter name
         while ('SYMBOL' != self._tokenizer.token_type()) or \
-              (JackSymbols.CLOSING_ROUND_BRACKET != self._tokenizer.symbol()):
+              (JackSymbols.CLOSING_PARENTHESIS != self._tokenizer.symbol()):
             # Handling the parameter type
             self._handle_var_type()
             self._tokenizer.advance()
@@ -332,18 +332,14 @@ class CompilationEngine:
         self._insert_keyword(JackKeywords.DO)
         self._tokenizer.advance()
 
-        # Handling the subroutine call
+        # Handling the first identifier token - it can be a class name, a variable name, or a subroutine name
         self._insert_identifier(self._tokenizer.identifier())
         self._tokenizer.advance()
 
-        # Handling the possibility of calling a method of an instance / object
+        # Handling the subrountine call for a case of a class name or a variable name (by ref)
         if ('SYMBOL' == self._tokenizer.token_type()) and \
            (JackSymbols.DOT == self._tokenizer.symbol()):
-            self._insert_symbol(JackSymbols.DOT)
-            self._tokenizer.advance()
-
-            self._insert_identifier(self._tokenizer.identifier())
-            self._tokenizer.advance()
+            self.compile_subroutine_ref_call()
 
         # Handling the expression list
         self.compile_expression_list()
@@ -406,18 +402,18 @@ class CompilationEngine:
         self._tokenizer.advance()
 
         # Handling the opening round bracket
-        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+        self._validate_symbol(JackSymbols.OPENING_PARENTHESIS, 
                               "CompilationEngine: Expected '(' symbol after while keyword")
-        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
         # Handling the expression
         self.compile_expression()
 
         # Handling the closing round bracket
-        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+        self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                               "CompilationEngine: Expected ')' symbol after expression")
-        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
         self._tokenizer.advance()
         
         # Handling the opening curly brace
@@ -470,18 +466,18 @@ class CompilationEngine:
         self._tokenizer.advance()
 
         # Handling the opening round bracket
-        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+        self._validate_symbol(JackSymbols.OPENING_PARENTHESIS, 
                               "CompilationEngine: Expected '(' symbol after if keyword")
-        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
         # Handling the expression
         self.compile_expression()
 
         # Handling the closing round bracket
-        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+        self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                               "CompilationEngine: Expected ')' symbol after expression")
-        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
         self._tokenizer.advance()
 
         # Handling the opening curly brace
@@ -571,9 +567,32 @@ class CompilationEngine:
         self._restore_subelement(xml_previous)
 
     def compile_identifier_term(self) -> None:
-        """Compiles an identifier term."""
+        """
+        Compiles an identifier term - A variable, an array entry, or a subroutine call.
+        """
+        # Handling the name - It MUST appear! Otherwise we got here in mysterious ways.
         self._insert_identifier(self._tokenizer.identifier())
         self._tokenizer.advance()
+
+        # Handling the possibility of an array access
+        if ('SYMBOL' == self._tokenizer.token_type()) and \
+           (JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol()):
+            self._handle_array_access()
+
+        # Handling the possibility of a subroutine call
+        elif ('SYMBOL' == self._tokenizer.token_type()) and \
+             (JackSymbols.OPENING_PARENTHESIS == self._tokenizer.symbol()):
+            self.compile_expression_list()
+
+        # Handling the possibility of a subroutine call for a class name or a variable name
+        elif ('SYMBOL' == self._tokenizer.token_type()) and \
+             (JackSymbols.DOT == self._tokenizer.symbol()):
+            self.compile_subroutine_ref_call()
+            self.compile_expression_list()
+        else:
+            # If it's not an array access or a subroutine call, then it's a variable,
+            # nothing should happen in this case
+            pass
 
     def compile_integer_constant_term(self) -> None:
         """Compiles an integer constant term."""
@@ -595,16 +614,19 @@ class CompilationEngine:
 
     def compile_symbol_term(self) -> None:
         """Compiles a symbol term."""
-        if JackSymbols.OPENING_ROUND_BRACKET == self._tokenizer.symbol():
-            self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        # Handling a nested expression
+        if JackSymbols.OPENING_PARENTHESIS == self._tokenizer.symbol():
+            self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
             self._tokenizer.advance()
 
             self.compile_expression()
 
-            self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+            self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                                     "CompilationEngine: Expected ')' symbol after expression")
-            self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+            self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
             self._tokenizer.advance()
+
+        # Handling a unary expression
         elif self._tokenizer.symbol() in CompilationEngine.JACK_UNARY_EXPRESSION_OPS:
             self._insert_symbol(self._tokenizer.symbol())
             self._tokenizer.advance()
@@ -612,12 +634,23 @@ class CompilationEngine:
         else:
             raise ValueError(f"CompilationEngine: Unexpected symbol {self._tokenizer.symbol()}")
 
+    def compile_subroutine_ref_call(self) -> None:
+        """
+        Handling the possibility of a subroutine call for a class name or a variable name.
+        If it doesn't exist, nothing would happen
+        """
+        self._insert_symbol(JackSymbols.DOT)
+        self._tokenizer.advance()
+
+        self._insert_identifier(self._tokenizer.identifier())
+        self._tokenizer.advance()
+
     def compile_expression_list(self) -> None:
         """Compiles a (possibly empty) comma-separated list of expressions."""
         # Handling the opening round bracket
-        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+        self._validate_symbol(JackSymbols.OPENING_PARENTHESIS, 
                               "CompilationEngine: Expected '(' symbol after subroutine name")
-        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
         # As per the XML specification, the expression list subelement is initialized
@@ -626,7 +659,7 @@ class CompilationEngine:
 
         # Handling the expression list, only if there are expressions in it
         if ('SYMBOL' != self._tokenizer.token_type()) or \
-           (JackSymbols.CLOSING_ROUND_BRACKET != self._tokenizer.symbol()):
+           (JackSymbols.CLOSING_PARENTHESIS != self._tokenizer.symbol()):
 
             # Handling the first expression, then the rest if there are any (separated by commas)
             self.compile_expression()
@@ -639,9 +672,9 @@ class CompilationEngine:
         self._restore_subelement(xml_previous)
 
         # Handling the closing round bracket
-        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+        self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                               "CompilationEngine: Expected ')' symbol after expression list")
-        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
         self._tokenizer.advance()
 
     def _handle_array_access(self) -> None:
