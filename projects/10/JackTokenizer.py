@@ -100,9 +100,6 @@ class JackTokenizer:
                'static', 'var', 'int', 'char', 'boolean', 'void', 'true',
                'false', 'null', 'this', 'let', 'do', 'if', 'else', 
                'while', 'return']
-    
-    MIN_INT = 0
-    MAX_INT = 32767
 
     def __init__(self, input_stream: typing.TextIO) -> None:
         """Opens the input stream and gets ready to tokenize it.
@@ -155,8 +152,7 @@ class JackTokenizer:
             return "KEYWORD"
         if current_token in JackTokenizer.SYMBOLS:
             return "SYMBOL"
-        if current_token.isdigit() and \
-           (JackTokenizer.MIN_INT <= int(current_token) <= JackTokenizer.MAX_INT):
+        if current_token.isdigit():
             return "INT_CONST"
         if current_token in self._string_ids:
             return "STRING_CONST"

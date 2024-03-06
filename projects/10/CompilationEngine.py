@@ -31,9 +31,11 @@ class JackSymbols:
     GREATER_THAN = ">"
     EQUALS = "="
     TILDE = "~"
+    SHIFT_RIGHT = "#"
+    SHIFT_LEFT = "^"
     ALL = [OPENING_CURLY_BRACKET, CLOSING_CURLY_BRACKET, OPENING_ROUND_BRACKET, CLOSING_ROUND_BRACKET,
            OPENING_SQUARE_BRACKET, CLOSING_SQUARE_BRACKET, DOT, COMMA, LINE_TERMINATOR, PLUS, MINUS,
-           ASTERISK, SLASH, AMPERSAND, PIPE, LESS_THAN, GREATER_THAN, EQUALS, TILDE]
+           ASTERISK, SLASH, AMPERSAND, PIPE, LESS_THAN, GREATER_THAN, EQUALS, TILDE, SHIFT_RIGHT, SHIFT_LEFT]
 
 class JackKeywords:
     """
@@ -82,12 +84,24 @@ class CompilationEngine:
     DO_STATEMENT_XML_TAG = "doStatement"
     LET_STATEMENT_XML_TAG = "letStatement"
     EXPRESSION_LIST_XML_TAG = "expressionList"
+    EXPRESSION_XML_TAG = "expression"
     WHILE_STATEMENT_XML_TAG = "whileStatement"
     RETURN_STATEMENT_XML_TAG = "returnStatement"
     IF_STATEMENT_XML_TAG = "ifStatement"
+    TERM_XML_TAG = "term"
 
     JACK_STATEMENTS = [JackKeywords.DO, JackKeywords.LET, JackKeywords.WHILE, 
                        JackKeywords.RETURN, JackKeywords.IF]
+    
+    JACK_EXPRESSION_OPS = [JackSymbols.PLUS, JackSymbols.MINUS, JackSymbols.ASTERISK,
+                            JackSymbols.SLASH, JackSymbols.AMPERSAND, JackSymbols.PIPE,
+                            JackSymbols.LESS_THAN, JackSymbols.GREATER_THAN, JackSymbols.EQUALS]
+    
+    JACK_UNARY_EXPRESSION_OPS = [JackSymbols.MINUS, JackSymbols.TILDE, 
+                                 JackSymbols.SHIFT_LEFT, JackSymbols.SHIFT_RIGHT]
+    
+    MIN_INT = 0
+    MAX_INT = 32767
 
     def __init__(self, input_stream: JackTokenizer.JackTokenizer, output_stream) -> None:
         """
@@ -511,11 +525,15 @@ class CompilationEngine:
 
     def compile_expression(self) -> None:
         """Compiles an expression."""
-        xml_previous = self._open_subelement(CompilationEngine.EXPRESSION_LIST_XML_TAG)
+        xml_previous = self._open_subelement(CompilationEngine.EXPRESSION_XML_TAG)
 
-        # PLACEHOLDER
-        self._insert_identifier(self._tokenizer._current_token())
-        self._tokenizer.advance()
+        self.compile_term()
+        # Compiling more terms if and only if there are expression operators
+        while ('SYMBOL' == self._tokenizer.token_type()) and \
+              (self._tokenizer.symbol() in CompilationEngine.JACK_EXPRESSION_OPS):
+            self._insert_symbol(self._tokenizer.symbol())
+            self._tokenizer.advance()
+            self.compile_term()
 
         self._restore_subelement(xml_previous)
 
@@ -531,8 +549,68 @@ class CompilationEngine:
         """
         xml_previous = self._open_subelement(CompilationEngine.TERM_XML_TAG)
 
+        # PLACEHOLDER for expression-less code
+        # self._insert_identifier(self._tokenizer._current_token())
+        # self._tokenizer.advance()
+
+        token_type = self._tokenizer.token_type()
+        if 'INT_CONST' == token_type:
+            self.compile_integer_constant_term()
+        elif 'STRING_CONST' == token_type:
+            self.compile_string_constant_term()
+        elif 'KEYWORD' == token_type:
+            self.compile_keyword_term()
+        elif 'IDENTIFIER' == token_type:
+            self.compile_identifier_term()
+        elif 'SYMBOL' == token_type:
+            self.compile_symbol_term()      
+        else:
+            raise ValueError(f"CompilationEngine: Unexpected token type {token_type}")
+
         # Restoring the previous root element
         self._restore_subelement(xml_previous)
+
+    def compile_identifier_term(self) -> None:
+        """Compiles an identifier term."""
+        self._insert_identifier(self._tokenizer.identifier())
+        self._tokenizer.advance()
+
+    def compile_integer_constant_term(self) -> None:
+        """Compiles an integer constant term."""
+        int_val = self._tokenizer.int_val()
+        if CompilationEngine.MIN_INT > int_val or CompilationEngine.MAX_INT < int_val:
+            raise ValueError(f"CompilationEngine: Integer constant out of range: {int_val}")
+        self._insert_int_const(self._tokenizer.int_val())
+        self._tokenizer.advance()
+
+    def compile_string_constant_term(self) -> None:
+        """Compiles a string constant term."""
+        self._insert_string_const(self._tokenizer.string_val())
+        self._tokenizer.advance()
+
+    def compile_keyword_term(self) -> None:
+        """Compiles a keyword constant term."""
+        self._insert_keyword(self._tokenizer.keyword())
+        self._tokenizer.advance()
+
+    def compile_symbol_term(self) -> None:
+        """Compiles a symbol term."""
+        if JackSymbols.OPENING_ROUND_BRACKET == self._tokenizer.symbol():
+            self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+            self._tokenizer.advance()
+
+            self.compile_expression()
+
+            self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+                                    "CompilationEngine: Expected ')' symbol after expression")
+            self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+            self._tokenizer.advance()
+        elif self._tokenizer.symbol() in CompilationEngine.JACK_UNARY_EXPRESSION_OPS:
+            self._insert_symbol(self._tokenizer.symbol())
+            self._tokenizer.advance()
+            self.compile_term()
+        else:
+            raise ValueError(f"CompilationEngine: Unexpected symbol {self._tokenizer.symbol()}")
 
     def compile_expression_list(self) -> None:
         """Compiles a (possibly empty) comma-separated list of expressions."""
