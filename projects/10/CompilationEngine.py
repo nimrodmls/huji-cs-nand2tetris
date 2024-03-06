@@ -67,6 +67,7 @@ class CompilationEngine:
     output stream.
     """
     TOKENS_XML_TAG = "tokens"
+    CLASS_XML_TAG = "class"
     KEYWORD_XML_TAG = "keyword"
     SYMBOL_XML_TAG = "symbol"
     IDENTIFIER_XML_TAG = "identifier"
@@ -82,6 +83,8 @@ class CompilationEngine:
     LET_STATEMENT_XML_TAG = "letStatement"
     EXPRESSION_LIST_XML_TAG = "expressionList"
     WHILE_STATEMENT_XML_TAG = "whileStatement"
+    RETURN_STATEMENT_XML_TAG = "returnStatement"
+    IF_STATEMENT_XML_TAG = "ifStatement"
 
     JACK_STATEMENTS = [JackKeywords.DO, JackKeywords.LET, JackKeywords.WHILE, 
                        JackKeywords.RETURN, JackKeywords.IF]
@@ -109,6 +112,8 @@ class CompilationEngine:
             raise ValueError("CompilationEngine: Expected 'class' keyword")
         
         # Create the root element
+        xml_previous = self._open_subelement(CompilationEngine.CLASS_XML_TAG)
+
         self._insert_keyword(JackKeywords.CLASS)
         self._tokenizer.advance()
 
@@ -139,6 +144,9 @@ class CompilationEngine:
             raise ValueError("CompilationEngine: Expected '}' symbol after class body")
         self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
         self._tokenizer.advance()
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_class_var_dec(self) -> None:
         """Compiles a static declaration or a field declaration."""
@@ -323,20 +331,8 @@ class CompilationEngine:
             self._insert_identifier(self._tokenizer.identifier())
             self._tokenizer.advance()
 
-        # Handling the opening round bracket
-        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
-                              "CompilationEngine: Expected '(' symbol after subroutine name")
-        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
-        self._tokenizer.advance()
-
         # Handling the expression list
         self.compile_expression_list()
-
-        # Handling the closing round bracket
-        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
-                              "CompilationEngine: Expected ')' symbol after expression list")
-        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
-        self._tokenizer.advance()
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, 
@@ -390,6 +386,41 @@ class CompilationEngine:
         """Compiles a while statement."""
         xml_previous = self._open_subelement(CompilationEngine.WHILE_STATEMENT_XML_TAG)
 
+        # Handling the while keyword itself
+        self._validate_keyword(JackKeywords.WHILE, "CompilationEngine: Expected 'while' keyword")
+        self._insert_keyword(JackKeywords.WHILE)
+        self._tokenizer.advance()
+
+        # Handling the opening round bracket
+        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected '(' symbol after while keyword")
+        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the expression
+        self.compile_expression()
+
+        # Handling the closing round bracket
+        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected ')' symbol after expression")
+        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._tokenizer.advance()
+        
+        # Handling the opening curly brace
+        self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '{' symbol after while expression")
+        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the statements
+        self.compile_statements()
+
+        # Handling the closing curly brace
+        self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '}' symbol after while statements")
+        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
+        self._tokenizer.advance()
+
         # Restore the previous root element
         self._restore_subelement(xml_previous)
 
@@ -397,12 +428,83 @@ class CompilationEngine:
         """Compiles a return statement."""
         xml_previous = self._open_subelement(CompilationEngine.RETURN_STATEMENT_XML_TAG)
 
+        # Handling the return keyword itself
+        self._validate_keyword(JackKeywords.RETURN, "CompilationEngine: Expected 'return' keyword")
+        self._insert_keyword(JackKeywords.RETURN)
+        self._tokenizer.advance()
+
+        # Handling the expression
+        if ('SYMBOL' != self._tokenizer.token_type()) or \
+           (JackSymbols.LINE_TERMINATOR != self._tokenizer.symbol()):
+            self.compile_expression()
+
+        # Handling the line terminator
+        self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
+        self._insert_symbol(self._tokenizer.symbol())
+        self._tokenizer.advance()
+
         # Restore the previous root element
         self._restore_subelement(xml_previous)
 
     def compile_if(self) -> None:
         """Compiles a if statement, possibly with a trailing else clause."""
         xml_previous = self._open_subelement(CompilationEngine.IF_STATEMENT_XML_TAG)
+
+        # Handling the if keyword itself
+        self._validate_keyword(JackKeywords.IF, "CompilationEngine: Expected 'if' keyword")
+        self._insert_keyword(JackKeywords.IF)
+        self._tokenizer.advance()
+
+        # Handling the opening round bracket
+        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected '(' symbol after if keyword")
+        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the expression
+        self.compile_expression()
+
+        # Handling the closing round bracket
+        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected ')' symbol after expression")
+        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the opening curly brace
+        self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '{' symbol after if expression")
+        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the statements
+        self.compile_statements()
+
+        # Handling the closing curly brace
+        self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '}' symbol after if statements")
+        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
+        self._tokenizer.advance()
+        
+        # Handling the possibility of an else clause
+        if ('KEYWORD' == self._tokenizer.token_type()) and \
+           (JackKeywords.ELSE == self._tokenizer.keyword()):
+            self._insert_keyword(JackKeywords.ELSE)
+            self._tokenizer.advance()
+
+            # Handling the opening curly brace
+            self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
+                                  "CompilationEngine: Expected '{' symbol after else keyword")
+            self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
+            self._tokenizer.advance()
+
+            # Handling the statements
+            self.compile_statements()
+
+            # Handling the closing curly brace
+            self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
+                                  "CompilationEngine: Expected '}' symbol after else statements")
+            self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
+            self._tokenizer.advance()
 
         # Restore the previous root element
         self._restore_subelement(xml_previous)
@@ -412,7 +514,8 @@ class CompilationEngine:
         xml_previous = self._open_subelement(CompilationEngine.EXPRESSION_LIST_XML_TAG)
 
         # PLACEHOLDER
-        self._insert_identifier(self._tokenizer.identifier())
+        self._insert_identifier(self._tokenizer._current_token())
+        self._tokenizer.advance()
 
         self._restore_subelement(xml_previous)
 
@@ -426,18 +529,42 @@ class CompilationEngine:
         to distinguish between the three possibilities. Any other token is not
         part of this term and should not be advanced over.
         """
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.TERM_XML_TAG)
+
+        # Restoring the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_expression_list(self) -> None:
         """Compiles a (possibly empty) comma-separated list of expressions."""
+        # Handling the opening round bracket
+        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected '(' symbol after subroutine name")
+        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._tokenizer.advance()
+
+        # As per the XML specification, the expression list subelement is initialized
+        # only after the opening round bracket is validated
         xml_previous = self._open_subelement(CompilationEngine.EXPRESSION_LIST_XML_TAG)
 
-        while ('SYMBOL' == self._tokenizer.token_type()) and \
-              (JackSymbols.COMMA == self._tokenizer.symbol):
+        # Handling the expression list, only if there are expressions in it
+        if ('SYMBOL' != self._tokenizer.token_type()) or \
+           (JackSymbols.CLOSING_ROUND_BRACKET != self._tokenizer.symbol()):
+
+            # Handling the first expression, then the rest if there are any (separated by commas)
             self.compile_expression()
+            while ('SYMBOL' == self._tokenizer.token_type()) and \
+                    (JackSymbols.COMMA == self._tokenizer.symbol()):
+                self._insert_symbol(JackSymbols.COMMA)
+                self._tokenizer.advance()
+                self.compile_expression()
 
         self._restore_subelement(xml_previous)
+
+        # Handling the closing round bracket
+        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected ')' symbol after expression list")
+        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._tokenizer.advance()
 
     def _handle_array_access(self) -> None:
         """
