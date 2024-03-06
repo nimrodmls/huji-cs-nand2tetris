@@ -68,6 +68,8 @@ class CompilationEngine:
     INT_CONST_XML_TAG = "integerConstant"
     STRING_CONST_XML_TAG = "stringConstant"
     CLASS_VAR_DEC_XML_TAG = "classVarDec"
+    CLASS_SUBROUTINE_XML_TAG = "subroutineDec"
+    PARAMETER_LIST_XML_TAG = "parameterList"
 
     def __init__(self, input_stream: JackTokenizer.JackTokenizer, output_stream) -> None:
         """
@@ -112,7 +114,9 @@ class CompilationEngine:
             self.compile_class_var_dec()
 
         # Compile the subroutines
-        self.compile_subroutine()
+        while ('KEYWORD' == self._tokenizer.token_type()) and \
+              (self._tokenizer.keyword() in [JackKeywoards.CONSTRUCTOR, JackKeywoards.FUNCTION, JackKeywoards.METHOD]):
+            self.compile_subroutine()
 
         # Add the closing curly brace
         close_curly = self._tokenizer.symbol()
@@ -132,10 +136,13 @@ class CompilationEngine:
 
         # Add the type
         self._validate_type()
-        self._insert_keyword(self._tokenizer.keyword())
+        if 'KEYWORD' == self._tokenizer.token_type():
+            self._insert_keyword(self._tokenizer.keyword())
+        else: # It's an identifier - If it isn't then _validate_type would have raised an exception
+            self._insert_identifier(self._tokenizer.identifier())
         self._tokenizer.advance()
 
-        # Add the variable name
+        # Add the variable names
         self._add_varname_list()
         
         # Restore the previous root element
@@ -147,15 +154,54 @@ class CompilationEngine:
         You can assume that classes with constructors have at least one field,
         you will understand why this is necessary in project 11.
         """
-        # Your code goes here!
-        pass
+        # Create the root element
+        xml_previous = self._open_subelement(CompilationEngine.CLASS_SUBROUTINE_XML_TAG)
+
+        # Expecting the constructor, function, or method keyword
+        self._insert_keyword(self._tokenizer.keyword())
+        self._tokenizer.advance()
+
+        # Add the return type
+        self._validate_type(with_void=True)
+        if 'KEYWORD' == self._tokenizer.token_type():
+            self._insert_keyword(self._tokenizer.keyword())
+        else: # It's an identifier - If it isn't then _validate_type would have raised an exception
+            self._insert_identifier(self._tokenizer.identifier())
+        self._tokenizer.advance()
+
+        # Add the subroutine name
+        self._insert_identifier(self._tokenizer.identifier())
+        self._tokenizer.advance()
+
+        # Add the opening round bracket
+        open_round = self._tokenizer.symbol()
+        if JackSymbols.OPENING_ROUND_BRACKET != open_round:
+            raise ValueError("CompilationEngine: Expected '(' symbol after subroutine name")
+        self._insert_symbol(open_round)
+        self._tokenizer.advance()
+
+        # Compile the parameter list
+        self.compile_parameter_list()
+
+        # Add the closing round bracket
+        close_round = self._tokenizer.symbol()
+        if JackSymbols.CLOSING_ROUND_BRACKET != close_round:
+            raise ValueError("CompilationEngine: Expected ')' symbol after parameter list")
+        self._insert_symbol(close_round)
+        self._tokenizer.advance()
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_parameter_list(self) -> None:
         """Compiles a (possibly empty) parameter list, not including the 
         enclosing "()".
         """
-        # Your code goes here!
-        pass
+        # Create the root element
+        xml_previous = self._open_subelement(CompilationEngine.PARAMETER_LIST_XML_TAG)
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_var_dec(self) -> None:
         """Compiles a var declaration."""
@@ -250,16 +296,20 @@ class CompilationEngine:
             previous_token_type = self._tokenizer.token_type()
             self._tokenizer.advance()
 
-    def _validate_type(self) -> None:
-        """Validates the current token type"""
+    def _validate_type(self, with_void=False) -> None:
+        """
+        Validates whether the current token is a valid type.
+        :param with_void: Whether to include the void keyword in the valid types.
+        :raises ValueError: If the current token is not a valid type.
+        """
         if self._tokenizer.token_type() not in ['KEYWORD', 'IDENTIFIER']:
             raise ValueError(f"CompilationEngine: Expected keyword or identifier, got {self._tokenizer.token_type()}")
         
         if 'KEYWORD' == self._tokenizer.token_type() and self._tokenizer.keyword() not in [
-            JackKeywoards.INT, JackKeywoards.CHAR, JackKeywoards.BOOLEAN]:
+            JackKeywoards.INT, JackKeywoards.CHAR, JackKeywoards.BOOLEAN] + ([JackKeywoards.VOID] if with_void else []):
             raise ValueError(f"CompilationEngine: Expected int, char, or boolean for type, got {self._tokenizer.keyword()}")
         
-        # Otherwise, it's an identifier    
+        # Otherwise, it's an identifier - It has no further typing
 
     def _open_subelement(self, tag: str) -> xml.Element:
         """Opens a subelement in the XML"""
@@ -272,6 +322,10 @@ class CompilationEngine:
     
     def _restore_subelement(self, previous_element: xml.Element) -> None:
         """Restores the previous subelement in the XML"""
+        # If the current element is empty, add an empty text to it, 
+        # in order to force the enclosing tag to be written
+        if 0 == len(self._xml_current):
+            self._xml_current.text = ''
         self._xml_current = previous_element
 
     def _insert_keyword(self, keyword: str) -> None:
