@@ -70,6 +70,7 @@ class CompilationEngine:
     CLASS_VAR_DEC_XML_TAG = "classVarDec"
     CLASS_SUBROUTINE_XML_TAG = "subroutineDec"
     PARAMETER_LIST_XML_TAG = "parameterList"
+    VAR_DEC_XML_TAG = "varDec"
 
     def __init__(self, input_stream: JackTokenizer.JackTokenizer, output_stream) -> None:
         """
@@ -192,7 +193,11 @@ class CompilationEngine:
         self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
         self._tokenizer.advance()
 
-        # Compile the subroutine body
+        # Compile the subroutine body - Variable declarations, and then statements
+        while ('KEYWORD' == self._tokenizer.token_type()) and \
+              (JackKeywoards.VAR == self._tokenizer.keyword()):
+            self.compile_var_dec()
+
         self.compile_statements()
 
         # Add the closing curly brace
@@ -232,8 +237,22 @@ class CompilationEngine:
 
     def compile_var_dec(self) -> None:
         """Compiles a var declaration."""
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.VAR_DEC_XML_TAG)
+
+        # Expecting the var keyword
+        self._insert_keyword(self._tokenizer.keyword())
+        self._tokenizer.advance()
+
+        # Add the type
+        self._handle_var_type()
+        self._tokenizer.advance()
+
+        # Add the variable names
+        self._add_varname_list()
+
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_statements(self) -> None:
         """Compiles a sequence of statements, not including the enclosing 
@@ -300,6 +319,9 @@ class CompilationEngine:
 
     def _add_varname_list(self) -> None:
         """
+        Adds a list of variable names to the XML.
+        The list is expected to be a comma-separated list of identifiers.
+        Advancing to the first token after the terminator.
         """
         # The first token should be an identifier, not a comma, and nothing else.
         if 'IDENTIFIER' != self._tokenizer.token_type():
