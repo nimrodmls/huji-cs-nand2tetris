@@ -135,11 +135,7 @@ class CompilationEngine:
         self._tokenizer.advance()
 
         # Add the type
-        self._validate_type()
-        if 'KEYWORD' == self._tokenizer.token_type():
-            self._insert_keyword(self._tokenizer.keyword())
-        else: # It's an identifier - If it isn't then _validate_type would have raised an exception
-            self._insert_identifier(self._tokenizer.identifier())
+        self._handle_var_type()
         self._tokenizer.advance()
 
         # Add the variable names
@@ -157,16 +153,14 @@ class CompilationEngine:
         # Create the root element
         xml_previous = self._open_subelement(CompilationEngine.CLASS_SUBROUTINE_XML_TAG)
 
+        ### SUBROUTINE DECLARATION ###
+
         # Expecting the constructor, function, or method keyword
         self._insert_keyword(self._tokenizer.keyword())
         self._tokenizer.advance()
 
         # Add the return type
-        self._validate_type(with_void=True)
-        if 'KEYWORD' == self._tokenizer.token_type():
-            self._insert_keyword(self._tokenizer.keyword())
-        else: # It's an identifier - If it isn't then _validate_type would have raised an exception
-            self._insert_identifier(self._tokenizer.identifier())
+        self._handle_var_type(with_void=True)
         self._tokenizer.advance()
 
         # Add the subroutine name
@@ -175,8 +169,8 @@ class CompilationEngine:
 
         # Add the opening round bracket
         open_round = self._tokenizer.symbol()
-        if JackSymbols.OPENING_ROUND_BRACKET != open_round:
-            raise ValueError("CompilationEngine: Expected '(' symbol after subroutine name")
+        self._validate_symbol(open_round, 
+                              "CompilationEngine: Expected '(' symbol after subroutine name")
         self._insert_symbol(open_round)
         self._tokenizer.advance()
 
@@ -185,9 +179,26 @@ class CompilationEngine:
 
         # Add the closing round bracket
         close_round = self._tokenizer.symbol()
-        if JackSymbols.CLOSING_ROUND_BRACKET != close_round:
-            raise ValueError("CompilationEngine: Expected ')' symbol after parameter list")
+        self._validate_symbol(close_round, 
+                              "CompilationEngine: Expected ')' symbol after parameter list")
         self._insert_symbol(close_round)
+        self._tokenizer.advance()
+
+        ### SUBROUTINE BODY ###
+
+        # Add the opening curly brace
+        self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '{' symbol after subroutine declaration")
+        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
+        self._tokenizer.advance()
+
+        # Compile the subroutine body
+        self.compile_statements()
+
+        # Add the closing curly brace
+        self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '}' symbol after subroutine body")
+        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
         self._tokenizer.advance()
 
         # Restore the previous root element
@@ -199,6 +210,22 @@ class CompilationEngine:
         """
         # Create the root element
         xml_previous = self._open_subelement(CompilationEngine.PARAMETER_LIST_XML_TAG)
+
+        # We expect a closing parenthesis or a comma after the parameter name
+        while ('SYMBOL' != self._tokenizer.token_type()) or \
+              (JackSymbols.CLOSING_ROUND_BRACKET != self._tokenizer.symbol()):
+            # Handling the parameter type
+            self._handle_var_type()
+            self._tokenizer.advance()
+
+            # Handling the parameter name
+            self._insert_identifier(self._tokenizer.identifier())
+            self._tokenizer.advance()
+
+            # Handling the comma
+            if JackSymbols.COMMA == self._tokenizer.symbol():
+                self._insert_symbol(JackSymbols.COMMA)
+                self._tokenizer.advance()
 
         # Restore the previous root element
         self._restore_subelement(xml_previous)
@@ -263,6 +290,14 @@ class CompilationEngine:
         # Your code goes here!
         pass
 
+
+    def _validate_symbol(self, symbol: str, err_msg=None) -> None:
+        """
+        """
+        if ('SYMBOL' != self._tokenizer.token_type()) or (self._tokenizer.symbol() != symbol):
+            message = err_msg if err_msg else f"CompilationEngine: Expected {symbol}, got {self._tokenizer.symbol()}"
+            raise ValueError(message)
+
     def _add_varname_list(self) -> None:
         """
         """
@@ -296,21 +331,26 @@ class CompilationEngine:
             previous_token_type = self._tokenizer.token_type()
             self._tokenizer.advance()
 
-    def _validate_type(self, with_void=False) -> None:
+    def _handle_var_type(self, with_void=False) -> None:
         """
-        Validates whether the current token is a valid type.
+        Handles a token that is a valid type (as defined in the Jack Language Grammar).
+        Validates the type and adds it to the XML.
         :param with_void: Whether to include the void keyword in the valid types.
         :raises ValueError: If the current token is not a valid type.
         """
         if self._tokenizer.token_type() not in ['KEYWORD', 'IDENTIFIER']:
             raise ValueError(f"CompilationEngine: Expected keyword or identifier, got {self._tokenizer.token_type()}")
         
+        # If it's a keyword, it should be int, char, or boolean (or void if with_void is True)
         if 'KEYWORD' == self._tokenizer.token_type() and self._tokenizer.keyword() not in [
             JackKeywoards.INT, JackKeywoards.CHAR, JackKeywoards.BOOLEAN] + ([JackKeywoards.VOID] if with_void else []):
             raise ValueError(f"CompilationEngine: Expected int, char, or boolean for type, got {self._tokenizer.keyword()}")
         
-        # Otherwise, it's an identifier - It has no further typing
-
+        if 'KEYWORD' == self._tokenizer.token_type():
+            self._insert_keyword(self._tokenizer.keyword())
+        else: # It's an identifier - If it isn't then an exception would have been raised by now
+            self._insert_identifier(self._tokenizer.identifier())
+        
     def _open_subelement(self, tag: str) -> xml.Element:
         """Opens a subelement in the XML"""
         subelement = xml.Element(tag)
