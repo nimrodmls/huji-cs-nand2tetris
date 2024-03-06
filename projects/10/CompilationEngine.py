@@ -31,8 +31,11 @@ class JackSymbols:
     GREATER_THAN = ">"
     EQUALS = "="
     TILDE = "~"
+    ALL = [OPENING_CURLY_BRACKET, CLOSING_CURLY_BRACKET, OPENING_ROUND_BRACKET, CLOSING_ROUND_BRACKET,
+           OPENING_SQUARE_BRACKET, CLOSING_SQUARE_BRACKET, DOT, COMMA, LINE_TERMINATOR, PLUS, MINUS,
+           ASTERISK, SLASH, AMPERSAND, PIPE, LESS_THAN, GREATER_THAN, EQUALS, TILDE]
 
-class JackKeywoards:
+class JackKeywords:
     """
     """
     CLASS = "class"
@@ -56,6 +59,8 @@ class JackKeywoards:
     FALSE = "false"
     NULL = "null"
     THIS = "this"
+    ALL = [CLASS, STATIC, FIELD, CONSTRUCTOR, FUNCTION, METHOD, INT, BOOLEAN, CHAR, 
+           VOID, VAR, LET, IF, ELSE, WHILE, DO, RETURN, TRUE, FALSE, NULL, THIS]
 
 class CompilationEngine:
     """Gets input from a JackTokenizer and emits its parsed structure into an
@@ -71,6 +76,11 @@ class CompilationEngine:
     CLASS_SUBROUTINE_XML_TAG = "subroutineDec"
     PARAMETER_LIST_XML_TAG = "parameterList"
     VAR_DEC_XML_TAG = "varDec"
+    STATEMENTS_XML_TAG = "statements"
+    CLASS_SUBROUTINE_BODY_XML_TAG = "subroutineBody"
+
+    JACK_STATEMENTS = [JackKeywords.DO, JackKeywords.LET, JackKeywords.WHILE, 
+                       JackKeywords.RETURN, JackKeywords.IF]
 
     def __init__(self, input_stream: JackTokenizer.JackTokenizer, output_stream) -> None:
         """
@@ -91,11 +101,11 @@ class CompilationEngine:
 
     def compile_class(self) -> None:
         """Compiles a complete class."""
-        if ('KEYWORD' != self._tokenizer.token_type()) or (JackKeywoards.CLASS != self._tokenizer.keyword()):
+        if ('KEYWORD' != self._tokenizer.token_type()) or (JackKeywords.CLASS != self._tokenizer.keyword()):
             raise ValueError("CompilationEngine: Expected 'class' keyword")
         
         # Create the root element
-        self._insert_keyword(JackKeywoards.CLASS)
+        self._insert_keyword(JackKeywords.CLASS)
         self._tokenizer.advance()
 
         # Add the class name
@@ -111,12 +121,12 @@ class CompilationEngine:
 
         # Compile the class variables
         while ('KEYWORD' == self._tokenizer.token_type()) and \
-              (self._tokenizer.keyword() in [JackKeywoards.STATIC, JackKeywoards.FIELD]):
+              (self._tokenizer.keyword() in [JackKeywords.STATIC, JackKeywords.FIELD]):
             self.compile_class_var_dec()
 
         # Compile the subroutines
         while ('KEYWORD' == self._tokenizer.token_type()) and \
-              (self._tokenizer.keyword() in [JackKeywoards.CONSTRUCTOR, JackKeywoards.FUNCTION, JackKeywoards.METHOD]):
+              (self._tokenizer.keyword() in [JackKeywords.CONSTRUCTOR, JackKeywords.FUNCTION, JackKeywords.METHOD]):
             self.compile_subroutine()
 
         # Add the closing curly brace
@@ -154,8 +164,6 @@ class CompilationEngine:
         # Create the root element
         xml_previous = self._open_subelement(CompilationEngine.CLASS_SUBROUTINE_XML_TAG)
 
-        ### SUBROUTINE DECLARATION ###
-
         # Expecting the constructor, function, or method keyword
         self._insert_keyword(self._tokenizer.keyword())
         self._tokenizer.advance()
@@ -185,27 +193,8 @@ class CompilationEngine:
         self._insert_symbol(close_round)
         self._tokenizer.advance()
 
-        ### SUBROUTINE BODY ###
-
-        # Add the opening curly brace
-        self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
-                              "CompilationEngine: Expected '{' symbol after subroutine declaration")
-        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
-        self._tokenizer.advance()
-
-        # Compile the subroutine body - Variable declarations, and then statements
-        while ('KEYWORD' == self._tokenizer.token_type()) and \
-              (JackKeywoards.VAR == self._tokenizer.keyword()):
-            self.compile_var_dec()
-
-        self.compile_statements()
-
-        # Add the closing curly brace
-        self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
-                              "CompilationEngine: Expected '}' symbol after subroutine body")
-        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
-        self._tokenizer.advance()
-
+        self.compile_subroutine_body()
+        
         # Restore the previous root element
         self._restore_subelement(xml_previous)
 
@@ -235,6 +224,33 @@ class CompilationEngine:
         # Restore the previous root element
         self._restore_subelement(xml_previous)
 
+    def compile_subroutine_body(self) -> None:
+        """
+        """
+        xml_previous = self._open_subelement(CompilationEngine.CLASS_SUBROUTINE_BODY_XML_TAG)
+
+        # Add the opening curly brace
+        self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '{' symbol after subroutine declaration")
+        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
+        self._tokenizer.advance()
+
+        # Compile the subroutine body - Variable declarations, and then statements
+        while ('KEYWORD' == self._tokenizer.token_type()) and \
+              (JackKeywords.VAR == self._tokenizer.keyword()):
+            self.compile_var_dec()
+
+        self.compile_statements()
+
+        # Add the closing curly brace
+        self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
+                              "CompilationEngine: Expected '}' symbol after subroutine body")
+        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
+        self._tokenizer.advance()
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
+
     def compile_var_dec(self) -> None:
         """Compiles a var declaration."""
         xml_previous = self._open_subelement(CompilationEngine.VAR_DEC_XML_TAG)
@@ -250,26 +266,89 @@ class CompilationEngine:
         # Add the variable names
         self._add_varname_list()
 
-
         # Restore the previous root element
         self._restore_subelement(xml_previous)
 
     def compile_statements(self) -> None:
-        """Compiles a sequence of statements, not including the enclosing 
-        "{}".
         """
-        # Your code goes here!
-        pass
+        Compiles a sequence of statements, not including the enclosing 
+        curly brackets.
+        """
+        xml_previous = self._open_subelement(CompilationEngine.STATEMENTS_XML_TAG)
+
+        # Statement is a keyword - Validating it
+        while ('KEYWORD' == self._tokenizer.token_type()):
+            
+            statement = self._tokenizer.keyword()
+            if JackKeywords.DO == statement:
+                self.compile_do()
+            elif JackKeywords.LET == statement:
+                self.compile_let()
+            elif JackKeywords.WHILE == statement:
+                self.compile_while()
+            elif JackKeywords.RETURN == statement:
+                self.compile_return()
+            elif JackKeywords.IF == statement:
+                self.compile_if()
+            else:
+                raise ValueError(f"CompilationEngine: Unexpected keyword {self._tokenizer.keyword()}, expected statement")
+        
+        # Restoring the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_do(self) -> None:
         """Compiles a do statement."""
-        # Your code goes here!
-        pass
+        # Create the root element
+        xml_previous = self._open_subelement(JackKeywords.DO)
+
+        # Handling the do keyword itself
+        self._validate_keyword(JackKeywords.DO, "CompilationEngine: Expected 'do' keyword")
+        self._insert_keyword(JackKeywords.DO)
+        self._tokenizer.advance()
+
+        # Handling the subroutine call
+        self._insert_identifier(self._tokenizer.identifier())
+        self._tokenizer.advance()
+
+        # Handling the opening round bracket
+        self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected '(' symbol after subroutine name")
+        self._insert_symbol(JackSymbols.OPENING_ROUND_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the expression list
+        self.compile_expression_list()
+
+        # Handling the closing round bracket
+        self._validate_symbol(JackSymbols.CLOSING_ROUND_BRACKET, 
+                              "CompilationEngine: Expected ')' symbol after expression list")
+        self._insert_symbol(JackSymbols.CLOSING_ROUND_BRACKET)
+        self._tokenizer.advance()
+
+        # Handling the line terminator
+        self._validate_symbol(JackSymbols.LINE_TERMINATOR, 
+                              "CompilationEngine: Expected ';' symbol after subroutine call")
+        self._insert_symbol(JackSymbols.LINE_TERMINATOR)
+        self._tokenizer.advance()
+
+        # Restoring the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_let(self) -> None:
         """Compiles a let statement."""
-        # Your code goes here!
-        pass
+        
+        xml_previous = self._open_subelement(JackKeywords.LET)
+
+        # Handling the let keyword itself
+        self._validate_keyword(JackKeywords.LET, "CompilationEngine: Expected 'let' keyword")
+        self._insert_keyword(JackKeywords.LET)
+        self._tokenizer.advance()
+
+        # Handling the variable name
+        self._insert_identifier(self._tokenizer.identifier())
+
+        # Restoring the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_while(self) -> None:
         """Compiles a while statement."""
@@ -310,12 +389,21 @@ class CompilationEngine:
         pass
 
 
-    def _validate_symbol(self, symbol: str, err_msg=None) -> None:
+    def _validate_symbol(self, symbol: str, err_msg: str) -> None:
         """
         """
-        if ('SYMBOL' != self._tokenizer.token_type()) or (self._tokenizer.symbol() != symbol):
-            message = err_msg if err_msg else f"CompilationEngine: Expected {symbol}, got {self._tokenizer.symbol()}"
-            raise ValueError(message)
+        self._type_validator('SYMBOL', self._tokenizer.symbol, symbol, err_msg)
+
+    def _validate_keyword(self, keyword: str, err_msg: str) -> None:
+        """
+        """
+        self._type_validator('KEYWORD', self._tokenizer.keyword, keyword, err_msg)
+    
+    def _type_validator(self, type: str, type_func, expected_value: str, err_msg: str):
+        """
+        """
+        if (type != self._tokenizer.token_type()) or (type_func() != expected_value):
+            raise ValueError(err_msg)
 
     def _add_varname_list(self) -> None:
         """
@@ -365,7 +453,7 @@ class CompilationEngine:
         
         # If it's a keyword, it should be int, char, or boolean (or void if with_void is True)
         if 'KEYWORD' == self._tokenizer.token_type() and self._tokenizer.keyword() not in [
-            JackKeywoards.INT, JackKeywoards.CHAR, JackKeywoards.BOOLEAN] + ([JackKeywoards.VOID] if with_void else []):
+            JackKeywords.INT, JackKeywords.CHAR, JackKeywords.BOOLEAN] + ([JackKeywords.VOID] if with_void else []):
             raise ValueError(f"CompilationEngine: Expected int, char, or boolean for type, got {self._tokenizer.keyword()}")
         
         if 'KEYWORD' == self._tokenizer.token_type():
