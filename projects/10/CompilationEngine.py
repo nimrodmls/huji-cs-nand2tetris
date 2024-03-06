@@ -78,6 +78,10 @@ class CompilationEngine:
     VAR_DEC_XML_TAG = "varDec"
     STATEMENTS_XML_TAG = "statements"
     CLASS_SUBROUTINE_BODY_XML_TAG = "subroutineBody"
+    DO_STATEMENT_XML_TAG = "doStatement"
+    LET_STATEMENT_XML_TAG = "letStatement"
+    EXPRESSION_LIST_XML_TAG = "expressionList"
+    WHILE_STATEMENT_XML_TAG = "whileStatement"
 
     JACK_STATEMENTS = [JackKeywords.DO, JackKeywords.LET, JackKeywords.WHILE, 
                        JackKeywords.RETURN, JackKeywords.IF]
@@ -299,7 +303,7 @@ class CompilationEngine:
     def compile_do(self) -> None:
         """Compiles a do statement."""
         # Create the root element
-        xml_previous = self._open_subelement(JackKeywords.DO)
+        xml_previous = self._open_subelement(CompilationEngine.DO_STATEMENT_XML_TAG)
 
         # Handling the do keyword itself
         self._validate_keyword(JackKeywords.DO, "CompilationEngine: Expected 'do' keyword")
@@ -309,6 +313,15 @@ class CompilationEngine:
         # Handling the subroutine call
         self._insert_identifier(self._tokenizer.identifier())
         self._tokenizer.advance()
+
+        # Handling the possibility of calling a method of an instance / object
+        if ('SYMBOL' == self._tokenizer.token_type()) and \
+           (JackSymbols.DOT == self._tokenizer.symbol()):
+            self._insert_symbol(JackSymbols.DOT)
+            self._tokenizer.advance()
+
+            self._insert_identifier(self._tokenizer.identifier())
+            self._tokenizer.advance()
 
         # Handling the opening round bracket
         self._validate_symbol(JackSymbols.OPENING_ROUND_BRACKET, 
@@ -337,7 +350,7 @@ class CompilationEngine:
     def compile_let(self) -> None:
         """Compiles a let statement."""
         
-        xml_previous = self._open_subelement(JackKeywords.LET)
+        xml_previous = self._open_subelement(CompilationEngine.LET_STATEMENT_XML_TAG)
 
         # Handling the let keyword itself
         self._validate_keyword(JackKeywords.LET, "CompilationEngine: Expected 'let' keyword")
@@ -346,29 +359,62 @@ class CompilationEngine:
 
         # Handling the variable name
         self._insert_identifier(self._tokenizer.identifier())
+        self._tokenizer.advance()
+
+        # Making sure a symbol appears after the variable name, since it must be
+        # either equal sign or the beginning of array access expression
+        if 'SYMBOL' == self._tokenizer.token_type():
+            if JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol():
+                self._handle_array_access()    
+            elif JackSymbols.EQUALS != self._tokenizer.symbol(): # It's not a [ nor =
+                raise ValueError(f"CompilationEngine: Expected [ or =, got {self._tokenizer.symbol()}")
+            
+        # Handling the equal sign - it must appear either way
+        self._validate_symbol(JackSymbols.EQUALS, 
+                              f"CompilationEngine: Expected '=' symbol after variable name, got {self._tokenizer.symbol()}")
+        self._insert_symbol(JackSymbols.EQUALS)
+        self._tokenizer.advance()
+        
+        # Handling the expression
+        self.compile_expression()
+
+        # Handling the line terminator
+        self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
+        self._insert_symbol(self._tokenizer.symbol())
+        self._tokenizer.advance()
 
         # Restoring the previous root element
         self._restore_subelement(xml_previous)
 
     def compile_while(self) -> None:
         """Compiles a while statement."""
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.WHILE_STATEMENT_XML_TAG)
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_return(self) -> None:
         """Compiles a return statement."""
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.RETURN_STATEMENT_XML_TAG)
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_if(self) -> None:
         """Compiles a if statement, possibly with a trailing else clause."""
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.IF_STATEMENT_XML_TAG)
+
+        # Restore the previous root element
+        self._restore_subelement(xml_previous)
 
     def compile_expression(self) -> None:
         """Compiles an expression."""
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.EXPRESSION_LIST_XML_TAG)
+
+        # PLACEHOLDER
+        self._insert_identifier(self._tokenizer.identifier())
+
+        self._restore_subelement(xml_previous)
 
     def compile_term(self) -> None:
         """Compiles a term. 
@@ -385,9 +431,28 @@ class CompilationEngine:
 
     def compile_expression_list(self) -> None:
         """Compiles a (possibly empty) comma-separated list of expressions."""
-        # Your code goes here!
-        pass
+        xml_previous = self._open_subelement(CompilationEngine.EXPRESSION_LIST_XML_TAG)
 
+        while ('SYMBOL' == self._tokenizer.token_type()) and \
+              (JackSymbols.COMMA == self._tokenizer.symbol):
+            self.compile_expression()
+
+        self._restore_subelement(xml_previous)
+
+    def _handle_array_access(self) -> None:
+        """
+        """
+        self._validate_symbol(JackSymbols.OPENING_SQUARE_BRACKET, 
+                              f"CompilationEngine: Expected [ symbol after variable name, got {self._tokenizer.symbol()}")
+        self._insert_symbol(JackSymbols.OPENING_SQUARE_BRACKET)
+        self._tokenizer.advance()
+
+        self.compile_expression()
+
+        self._validate_symbol(JackSymbols.CLOSING_SQUARE_BRACKET, 
+                              f"CompilationEngine: Expected ] symbol after expression, got {self._tokenizer.symbol()}")
+        self._insert_symbol(JackSymbols.CLOSING_SQUARE_BRACKET)
+        self._tokenizer.advance()
 
     def _validate_symbol(self, symbol: str, err_msg: str) -> None:
         """
