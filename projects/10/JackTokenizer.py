@@ -107,7 +107,7 @@ class JackTokenizer:
         Args:
             input_stream (typing.TextIO): input stream.
         """
-        raw_code = JackTokenizer._strip_all_comments(input_stream.read())
+        raw_code = input_stream.read()
 
         # Replace all string constants with a unique identifier
         self._string_ids = {}
@@ -116,6 +116,10 @@ class JackTokenizer:
             str_id = self._generate_string_uid(idx, raw_code)
             raw_code = raw_code.replace('"'+match+'"', str_id)
             self._string_ids[str_id] = match
+
+        # Remove all comments from the code - Doing this after the string replacement
+        # to prevent "comments" being in strings
+        raw_code = JackTokenizer._strip_all_comments(raw_code)
 
         # Split the code into tokens - based on symbols, whitespaces, and string constants
         raw_code = raw_code.split()

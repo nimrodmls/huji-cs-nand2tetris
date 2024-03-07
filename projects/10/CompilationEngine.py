@@ -113,7 +113,7 @@ class CompilationEngine:
         self._tokenizer = input_stream
         self._output_stream = output_stream
 
-        self._xml_toplevel = xml.Element(CompilationEngine.TOKENS_XML_TAG)
+        self._xml_toplevel = xml.Element(CompilationEngine.CLASS_XML_TAG)
         self._xml_current = self._xml_toplevel
 
     def finalize(self):
@@ -125,9 +125,6 @@ class CompilationEngine:
         if ('KEYWORD' != self._tokenizer.token_type()) or (JackKeywords.CLASS != self._tokenizer.keyword()):
             raise ValueError("CompilationEngine: Expected 'class' keyword")
         
-        # Create the root element
-        xml_previous = self._open_subelement(CompilationEngine.CLASS_XML_TAG)
-
         self._insert_keyword(JackKeywords.CLASS)
         self._tokenizer.advance()
 
@@ -158,9 +155,6 @@ class CompilationEngine:
             raise ValueError("CompilationEngine: Expected '}' symbol after class body")
         self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
         self._tokenizer.advance()
-
-        # Restore the previous root element
-        self._restore_subelement(xml_previous)
 
     def compile_class_var_dec(self) -> None:
         """Compiles a static declaration or a field declaration."""
