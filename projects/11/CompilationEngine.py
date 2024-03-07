@@ -9,7 +9,9 @@ import typing
 import JackTokenizer
 import lxml.etree as xml
 
-from JackConstants import JackKeywords, JackSymbols, JackVariableTypes
+from JackConstants import JackKeywords, JackSymbols, JackVariableTypes, HACK_MIN_INT, HACK_MAX_INT
+from SymbolTable import SymbolTable
+from VMWriter import VMMemorySegments, VMArithmeticCommands, VMWriter
 
 class CompilationEngine:
     """Gets input from a JackTokenizer and emits its parsed structure into an
@@ -47,9 +49,6 @@ class CompilationEngine:
     JACK_UNARY_EXPRESSION_OPS = [JackSymbols.MINUS, JackSymbols.TILDE, 
                                  JackSymbols.SHIFT_LEFT, JackSymbols.SHIFT_RIGHT]
     
-    MIN_INT = 0
-    MAX_INT = 32767
-
     def __init__(self, input_stream: JackTokenizer.JackTokenizer, output_stream) -> None:
         """
         Creates a new compilation engine with the given input and output. The
@@ -58,8 +57,9 @@ class CompilationEngine:
         :param output_stream: The output stream.
         """
         self._tokenizer = input_stream
-        self._output_stream = output_stream
-
+        self._symbol_table = SymbolTable()
+        self._vm_writer = VMWriter(output_stream)
+        
         self._xml_toplevel = xml.Element(CompilationEngine.CLASS_XML_TAG)
         self._xml_current = self._xml_toplevel
 
@@ -143,24 +143,27 @@ class CompilationEngine:
         self._insert_identifier(self._tokenizer.identifier())
         self._tokenizer.advance()
 
-        # Add the opening round bracket
-        open_round = self._tokenizer.symbol()
-        self._validate_symbol(open_round, 
-                              "CompilationEngine: Expected '(' symbol after subroutine name")
-        self._insert_symbol(open_round)
-        self._tokenizer.advance()
+        # Starting the subroutine scope for the symbol table
+        with self._symbol_table:
 
-        # Compile the parameter list
-        self.compile_parameter_list()
+            # Add the opening round bracket
+            open_round = self._tokenizer.symbol()
+            self._validate_symbol(open_round, 
+                                "CompilationEngine: Expected '(' symbol after subroutine name")
+            self._insert_symbol(open_round)
+            self._tokenizer.advance()
 
-        # Add the closing round bracket
-        close_round = self._tokenizer.symbol()
-        self._validate_symbol(close_round, 
-                              "CompilationEngine: Expected ')' symbol after parameter list")
-        self._insert_symbol(close_round)
-        self._tokenizer.advance()
+            # Compile the parameter list
+            self.compile_parameter_list()
 
-        self.compile_subroutine_body()
+            # Add the closing round bracket
+            close_round = self._tokenizer.symbol()
+            self._validate_symbol(close_round, 
+                                "CompilationEngine: Expected ')' symbol after parameter list")
+            self._insert_symbol(close_round)
+            self._tokenizer.advance()
+
+            self.compile_subroutine_body()
         
         # Restore the previous root element
         self._restore_subelement(xml_previous)
@@ -538,7 +541,7 @@ class CompilationEngine:
     def compile_integer_constant_term(self) -> None:
         """Compiles an integer constant term."""
         int_val = self._tokenizer.int_val()
-        if CompilationEngine.MIN_INT > int_val or CompilationEngine.MAX_INT < int_val:
+        if HACK_MIN_INT > int_val or HACK_MAX_INT < int_val:
             raise ValueError(f"CompilationEngine: Integer constant out of range: {int_val}")
         self._insert_int_const(self._tokenizer.int_val())
         self._tokenizer.advance()

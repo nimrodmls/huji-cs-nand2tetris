@@ -67,6 +67,12 @@ class SymbolTable:
         """
         self._subroutine_symbols = {}
 
+    def __iter__(self) -> typing.Iterator[Symbol]:
+        """
+        Returns an iterator over all the symbols in the symbol table.
+        """
+        return iter(self._class_symbols.values()) + iter(self._subroutine_symbols.values())
+
     def define(self, name: str, type: str, kind: str) -> None:
         """Defines a new identifier of a given name, type and kind and assigns 
         it a running index. "STATIC" and "FIELD" identifiers have a class scope, 

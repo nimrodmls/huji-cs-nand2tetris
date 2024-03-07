@@ -1,3 +1,9 @@
+MIN_TEMP_SEGMENT = 5
+MAX_TEMP_SEGMENT = 12
+
+HACK_MIN_INT = 0
+HACK_MAX_INT = 32767
+
 class JackVariableTypes:
     """
     A class to hold the different types of variables in the Jack language.
