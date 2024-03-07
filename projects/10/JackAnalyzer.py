@@ -20,6 +20,7 @@ def analyze_file(
         input_file (typing.TextIO): the file to analyze.
         output_file (typing.TextIO): writes all output to this file.
     """
+    print(f"Analyzing file {input_file.name}")
     tokenizer = JackTokenizer(input_file)
     engine = CompilationEngine(tokenizer, output_file)
     engine.compile_class()

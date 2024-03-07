@@ -778,7 +778,8 @@ class CompilationEngine:
         # If the current element is empty, add an empty text to it, 
         # in order to force the enclosing tag to be written
         if 0 == len(self._xml_current):
-            self._xml_current.text = ''
+            # Adding new line messes up the indentation
+            self._xml_current.text = '\n'
         self._xml_current = previous_element
 
     def _insert_keyword(self, keyword: str) -> None:
@@ -799,7 +800,7 @@ class CompilationEngine:
     def _insert_int_const(self, int_const: str) -> None:
         """Inserts an integer constant into the XML"""
         CompilationEngine._insert_to_xml(
-            self._xml_current, CompilationEngine.INT_CONST_XML_TAG, int_const)
+            self._xml_current, CompilationEngine.INT_CONST_XML_TAG, str(int_const))
         
     def _insert_string_const(self, string_const: str) -> None:
         """Inserts a string constant into the XML"""
