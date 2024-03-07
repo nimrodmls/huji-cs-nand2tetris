@@ -1,3 +1,6 @@
 tools/*
 *.pdf
 *.out
+*.pyc
+*.asm
+*.hack
