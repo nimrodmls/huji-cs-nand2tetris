@@ -78,7 +78,9 @@ class Parser:
     def parse_translate(self):
         """
         """
-        asm = ''
+        asm = []
+        total_vm_commands = 0
+        total_asm_commands = 0
         for command in self._code:
             command_tokens = command.split()
 
@@ -89,8 +91,18 @@ class Parser:
             # The first element of the command tokens is the VM command,
             # hence we get the proper handler for it, and call it, with the
             # rest of the command tokens, if available
-            asm += self._command_handlers[command_tokens[0]](*command_tokens[1:])
-        return asm
+            new_asm = self._command_handlers[command_tokens[0]](*command_tokens[1:])
+            asm += new_asm
+
+            total_asm_commands += len(new_asm) - 1 # Removing the line of comment
+            total_vm_commands += 1
+
+            # We limit the output to 800 commands, due to the computer's constraints
+            # We assume that each command adds a comment line
+            if total_asm_commands > 800:
+                return "\n".join(asm[:800 + total_vm_commands])
+        
+        return "\n".join(asm)
 
     @staticmethod
     def _strip_all_comments(code):

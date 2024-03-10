@@ -7,42 +7,41 @@ Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
 from typing import List
 
-def concat_asm_code(asm: List[str]) -> str:
+def relation_asm(relation, count):
     """
-    Simply concates a series of asm commands (or any string, really)
-    into a text format for asm (e.g. every element is in its own line)
     """
-    return "\n".join(asm + [""])
+    return [
+        "@SP",
+        "M=M-1",
+        "A=M",
+        "D=M",
+        "A=A-1",
+        "D=D-M",
+        f"@IS_TRUE_{relation}_{count}",
+        f"D;{relation}",
+        "D=0",
+        f"@SET_RESULT_{relation}_{count}",
+        "0;JMP",
+        f"(IS_TRUE_{relation}_{count})",
+        "D=-1",
+        f"(SET_RESULT_{relation}_{count})",
+        "@SP",
+        "A=M-1",
+        "M=D"
+    ]
 
-RELATIONS_ASM = concat_asm_code(
-    ["@SP",
-     "M=M-1",
-     "A=M",
-     "D=M",
-     "A=A-1",
-     "D=D-M",
-     "@IS_TRUE_{relation}_{count}",
-     "D;{relation}",
-     "D=0",
-     "@SET_RESULT_{relation}_{count}",
-     "0;JMP",
-     "(IS_TRUE_{relation}_{count})",
-     "D=-1",
-     "(SET_RESULT_{relation}_{count})",
-     "@SP",
-     "A=M-1",
-     "M=D"
-     ])
-
-# Hack ASM code for access to keyworded segments (e.g. local)
-# After calling this piece of code, the A register will hold
-# the address requested for the memory segment
-GET_DYNAMIC_SEGMENT_ADDR_ASM = concat_asm_code(
-    ["@{address}",
-    "D=A",
-    "@{segment}",
-    "A=D+M"
-])
+def get_dynamic_segment_addr_asm(segment, address):
+    """
+    Hack ASM code for access to keyworded segments (e.g. local)
+    After calling this piece of code, the A register will hold
+    the address requested for the memory segment
+    """
+    return [
+        f"@{address}",
+        "D=A",
+        f"@{segment}",
+        "A=D+M"
+    ]
 
 class CodeWriter:
     """Translates VM commands into Hack assembly code."""
@@ -87,14 +86,15 @@ class CodeWriter:
         """
         # We manually set the stack pointer to one position less, as we
         # pop two values and push one value
-        return "// add\n" + concat_asm_code(
-            ["@SP",
-             "M=M-1",
-             "A=M",
-             "D=M",
-             "A=A-1",
-             "M=D+M"
-            ])
+        return [
+            "// add",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            "A=A-1",
+            "M=D+M"
+        ]
 
     def vm_sub(self) -> str:
         """
@@ -103,14 +103,15 @@ class CodeWriter:
         result is pushed, hence the result is on top of the stack.
         """
         # Implementation is identical to addition, only final arithmetic is changed
-        return "// sub\n" + concat_asm_code(
-            ["@SP",
-             "M=M-1",
-             "A=M",
-             "D=-M",
-             "A=A-1",
-             "M=D+M"
-            ])
+        return [
+            "// sub",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=-M",
+            "A=A-1",
+            "M=D+M"
+        ]
 
     def vm_neg(self) -> str:
         """
@@ -119,18 +120,19 @@ class CodeWriter:
         """
         # We don't pop/push anything, we just "hotfix" the value on
         # the stack directly
-        return "// neg\n" + concat_asm_code(
-            ["@SP",
-             "A=M-1",
-             "M=-M"
-            ])
+        return [
+            "// neg",
+            "@SP",
+            "A=M-1",
+            "M=-M"
+        ]
 
     def vm_eq(self) -> str:
         """
         Returning Hack ASM for equality validation between the topmost 2
         items in the stack
         """
-        asm_code = "// eq\n" + RELATIONS_ASM.format(relation="JEQ", count=self._eq_counter)
+        asm_code = ["// eq"] + relation_asm(relation="JEQ", count=self._eq_counter)
         self._eq_counter += 1
         return asm_code
 
@@ -139,7 +141,7 @@ class CodeWriter:
         Returning Hack ASM for (strictly) greater-than between the
         topmost 2 items in the stack
         """
-        asm_code = "// gt\n" + RELATIONS_ASM.format(relation="JLT", count=self._gt_counter)
+        asm_code = ["// gt"] + relation_asm(relation="JLT", count=self._gt_counter)
         self._gt_counter += 1
         return asm_code
 
@@ -148,36 +150,39 @@ class CodeWriter:
         Returning the Hack ASM for (strictly) less-than between the topmost 
         2 items in the stack
         """
-        asm_code = "// lt\n" + RELATIONS_ASM.format(relation="JGT", count=self._lt_counter)
+        asm_code = ["// lt"] + relation_asm(relation="JGT", count=self._lt_counter)
         self._lt_counter += 1
         return asm_code
 
     def vm_and(self) -> str:
-        return "// and\n" + concat_asm_code(
-            ["@SP",
-             "M=M-1",
-             "A=M",
-             "D=M",
-             "A=A-1",
-             "M=D&M"
-            ])
+        return [
+            "// and",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            "A=A-1",
+            "M=D&M"
+        ]
 
     def vm_or(self) -> str:
-        return "// or\n" + concat_asm_code(
-            ["@SP",
-             "M=M-1",
-             "A=M",
-             "D=M",
-             "A=A-1",
-             "M=D|M"
-            ])
+        return [
+            "// or",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            "A=A-1",
+            "M=D|M"
+        ]
 
     def vm_not(self) -> str:
-        return "// not\n" + concat_asm_code(
-            ["@SP",
-             "A=M-1",
-             "M=!M"
-            ])
+        return [
+            "// not",
+            "@SP",
+            "A=M-1",
+            "M=!M"
+        ]
 
     # Stack-manipulating commands
 
@@ -186,29 +191,31 @@ class CodeWriter:
         Generating Hack ASM code for pushing into the stack
         from the requested segment, at the given address within.
         """
-        asm_code = f"// push {segment} {address}\n"
+        asm_code = [f"// push {segment} {address}"]
 
         # First we wish to set the A register to the
         # requested address within the segment, and
         # then we set the D register to have the data
         # we wish to push into the stack
         if segment == CodeWriter.CONSTANT_SEGMENT_NOTATION:
-            asm_code += concat_asm_code(
-                [f"@{address}",
-                 "D=A"])
+            asm_code += [
+                f"@{address}",
+                "D=A"
+            ]
         else:
-            asm_code += CodeWriter._generate_segment_address(segment, address) + "D=M\n"
+            asm_code += CodeWriter._generate_segment_address(segment, address) + ["D=M"]
 
         # Placing the data we got from the memory segment 
         # (which, as we did in the previous stage, is in the D register)
         # into the stack & incrementing the stack pointer, 
         # a logic which is common to all cases
-        asm_code += concat_asm_code(
-            ["@SP",
-             "A=M",
-             "M=D",
-             "@SP",
-             "M=M+1"])
+        asm_code += [
+            "@SP",
+            "A=M",
+            "M=D",
+            "@SP",
+            "M=M+1"
+        ]
         return asm_code
 
     def vm_pop(self, segment: str, address: int) -> str:
@@ -218,23 +225,24 @@ class CodeWriter:
         """
         # First we let A register hold the address to the location
         # which we want to pop into
-        asm_code = f"// pop {segment} {address}\n" + \
+        asm_code = [f"// pop {segment} {address}"] + \
                    CodeWriter._generate_segment_address(segment, address)
         
         # Here we save the address to the location we want to pop into (in R15)
         # and then we manipulate the SP, save the value in the stack, and
         # write it into the requested location (which was saved in R15)
-        asm_code += concat_asm_code(
-                    ["D=A",
-                     "@R15",
-                     "M=D",
-                     "@SP",
-                     "M=M-1",
-                     "A=M",
-                     "D=M",
-                     "@R15",
-                     "A=M",
-                     "M=D"])
+        asm_code += [
+            "D=A",
+            "@R15",
+            "M=D",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            "@R15",
+            "A=M",
+            "M=D"
+        ]
         return asm_code
  
     @staticmethod
@@ -246,7 +254,7 @@ class CodeWriter:
         # We generate the ASM code for accessing the requested address,
         # note that dynamic and fixed each have different ASM code
         if segment in CodeWriter.DYNAMIC_SEGMENTS_MAPPING:
-            return GET_DYNAMIC_SEGMENT_ADDR_ASM.format(
+            return get_dynamic_segment_addr_asm(
                 segment=CodeWriter.DYNAMIC_SEGMENTS_MAPPING[segment], address=internal_address)
         else: # Fixed Segments
             return CodeWriter._generate_address_by_offset(
@@ -259,4 +267,4 @@ class CodeWriter:
         given address, at the specified offset.
         """
         ram_offset = offset + address
-        return f"@{ram_offset}\n"
+        return [f"@{ram_offset}"]
