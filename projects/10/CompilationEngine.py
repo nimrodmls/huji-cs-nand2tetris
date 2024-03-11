@@ -162,6 +162,8 @@ class CompilationEngine:
         xml_previous = self._open_subelement(CompilationEngine.CLASS_VAR_DEC_XML_TAG)
 
         # Expecting the static or field keyword
+        if self._tokenizer.keyword() not in [JackKeywords.STATIC, JackKeywords.FIELD]:
+            raise ValueError("CompilationEngine: Expected 'static' or 'field' keyword for class variables")
         self._insert_keyword(self._tokenizer.keyword())
         self._tokenizer.advance()
 
