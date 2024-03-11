@@ -67,20 +67,40 @@ class SymbolTable:
         """
         self._subroutine_symbols = {}
 
-    def __iter__(self) -> typing.Iterator[Symbol]:
+    def __getitem__(self, name: str) -> Symbol:
         """
-        Returns an iterator over all the symbols in the symbol table.
+        Retrieves a symbol from the symbol table by name.
         """
-        return iter(self._class_symbols.values()) + iter(self._subroutine_symbols.values())
-    
+        return self.get_symbol(name)
+
     def __repr__(self) -> str:
         """
-        Pretty prints the symbol table.
+        Pretty prints the current symbol table.
         """
         out = 'Symbol Table:\n'
-        for symbol in self:
-            out += f"\t{symbol}\n"
+        out += '\tClass Symbols:\n'
+        for name, symbol in self._class_symbols.items():
+            out += f"\t\t{symbol}\n"
+        out += '\tSubroutine Symbols:\n'
+        for name, symbol in self._subroutine_symbols.items():
+            out += f"\t\t{symbol}\n"
         return out
+    
+    def print_class_symbols(self) -> None:
+        """
+        Prints the class symbols.
+        """
+        print("Class Symbols:")
+        for name, symbol in self._class_symbols.items():
+            print(f"\t{symbol}")
+
+    def print_subroutine_symbols(self) -> None:
+        """
+        Prints the subroutine symbols.
+        """
+        print("Subroutine Symbols:")
+        for name, symbol in self._subroutine_symbols.items():
+            print(f"\t{symbol}")
 
     def define(self, name: str, type: str, kind: str) -> None:
         """Defines a new identifier of a given name, type and kind and assigns 

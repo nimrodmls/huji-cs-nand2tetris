@@ -9,22 +9,53 @@ import typing
 import JackTokenizer
 
 from JackConstants import JackKeywords, JackSymbols, JackVariableTypes, HACK_MIN_INT, HACK_MAX_INT
-from SymbolTable import SymbolTable, VariableKinds
+from SymbolTable import Symbol, SymbolTable, VariableKinds
 from VMWriter import VMMemorySegments, VMArithmeticCommands, VMWriter
 
-class CompilationEngine:
-    """Gets input from a JackTokenizer and emits its parsed structure into an
-    output stream.
+class OS_API:
     """
+    Handles the OS API calls for the Jack language.
+    """
+    
+    def __init__(self, vm_writer: VMWriter) -> None:
+        self._vm_writer = vm_writer
+
+    def new_string(self, string_val: str) -> None:
+        """
+        Creates a new string object from the given string value.
+        """
+        self._vm_writer.write_push(VMMemorySegments.CONST, len(string_val))
+        self._vm_writer.write_call('String.new', 1)
+        for char in string_val:
+            self._vm_writer.write_push(VMMemorySegments.CONST, ord(char))
+            self._vm_writer.write_call('String.appendChar', 1)
+
+class CompilationEngine:
+    """
+    Gets input from a JackTokenizer and emits its parsed structure into an output stream.
+    All functions with vm prefix are used to write VM commands to the output stream.
+    """
+
+    # All the statements in the Jack language
     JACK_STATEMENTS = [JackKeywords.DO, JackKeywords.LET, JackKeywords.WHILE, 
                        JackKeywords.RETURN, JackKeywords.IF]
     
+    # All the operators in the Jack language
     JACK_EXPRESSION_OPS = [JackSymbols.PLUS, JackSymbols.MINUS, JackSymbols.ASTERISK,
                             JackSymbols.SLASH, JackSymbols.AMPERSAND, JackSymbols.PIPE,
                             JackSymbols.LESS_THAN, JackSymbols.GREATER_THAN, JackSymbols.EQUALS]
     
+    # All the unary operators in the Jack language
     JACK_UNARY_EXPRESSION_OPS = [JackSymbols.MINUS, JackSymbols.TILDE, 
                                  JackSymbols.SHIFT_LEFT, JackSymbols.SHIFT_RIGHT]
+    
+    # Mapping between the Jack variable types and the VM host memory segments
+    SEGMENT_MAP = {
+        JackKeywords.FIELD: VMMemorySegments.THIS,
+        JackKeywords.STATIC: VMMemorySegments.STATIC,
+        VariableKinds.ARG: VMMemorySegments.ARG,
+        VariableKinds.VAR: VMMemorySegments.LOCAL
+    }
     
     def __init__(self, input_stream: JackTokenizer.JackTokenizer, output_stream) -> None:
         """
@@ -34,14 +65,17 @@ class CompilationEngine:
         :param output_stream: The output stream.
         """
         self._tokenizer = input_stream
-        self._symbol_table = SymbolTable()
+        self._symbol_table: SymbolTable = SymbolTable()
         self._vm_writer = VMWriter(output_stream)
+        self._os_api = OS_API(self._vm_writer)
         
     def finalize(self):
-        pass
+        self._symbol_table.print_class_symbols()
 
     def compile_class(self) -> None:
-        """Compiles a complete class."""
+        """
+        Compiles a complete class
+        """
         if ('KEYWORD' != self._tokenizer.token_type()) or (JackKeywords.CLASS != self._tokenizer.keyword()):
             raise ValueError("CompilationEngine: Expected 'class' keyword")
         
@@ -79,7 +113,7 @@ class CompilationEngine:
     def compile_class_var_dec(self) -> None:
         """Compiles a static declaration or a field declaration."""
         # Expecting the static or field keyword
-        if ('KEYWORD' != self._tokenizer.token_type) or \
+        if ('KEYWORD' != self._tokenizer.token_type()) or \
            (self._tokenizer.keyword() not in [VariableKinds.STATIC, VariableKinds.FIELD]):
             raise ValueError("CompilationEngine: Expected 'static' or 'field' keyword for class variables")
         
@@ -121,7 +155,7 @@ class CompilationEngine:
                                 "CompilationEngine: Expected '(' symbol after subroutine name")
             self._tokenizer.advance()
 
-            # Compile the parameter list
+            # Compile the parameter list - adding the parameters to the symbol table
             self.compile_parameter_list()
 
             # Validate the closing round bracket
@@ -130,6 +164,9 @@ class CompilationEngine:
             self._tokenizer.advance()
 
             self.compile_subroutine_body()
+
+            # TODO: Remove
+            self._symbol_table.print_subroutine_symbols()
         
     def compile_parameter_list(self) -> None:
         """Compiles a (possibly empty) parameter list, not including the 
@@ -189,7 +226,7 @@ class CompilationEngine:
         self._tokenizer.advance()
 
         # Add the variable names
-        self._add_variable_list(var_type, VariableKinds.VAR)
+        self._add_variable_list(VariableKinds.VAR, var_type)
 
     def compile_statements(self) -> None:
         """
@@ -243,29 +280,33 @@ class CompilationEngine:
         
         # Handling the let keyword itself
         self._validate_keyword(JackKeywords.LET, "CompilationEngine: Expected 'let' keyword")
-        self._insert_keyword(JackKeywords.LET)
         self._tokenizer.advance()
 
-        # Handling the variable name
-        self._insert_identifier(self._tokenizer.identifier())
+        # Parsing the variable name and retrieving it from the symbol table
+        var_symbol = self._symbol_table[self._tokenizer.identifier()]
         self._tokenizer.advance()
 
         # Making sure a symbol appears after the variable name, since it must be
         # either equal sign or the beginning of array access expression
         if 'SYMBOL' == self._tokenizer.token_type():
             if JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol():
-                self._handle_array_access()    
+                if 'Array' != var_symbol.type():
+                    raise ValueError("CompilationEngine: Array access is only allowed for array variables")
+                self._handle_array_access()
             elif JackSymbols.EQUALS != self._tokenizer.symbol(): # It's not a [ nor =
                 raise ValueError(f"CompilationEngine: Expected [ or =, got {self._tokenizer.symbol()}")
             
         # Handling the equal sign - it must appear either way
         self._validate_symbol(JackSymbols.EQUALS, 
                               f"CompilationEngine: Expected '=' symbol after variable name, got {self._tokenizer.symbol()}")
-        self._insert_symbol(JackSymbols.EQUALS)
         self._tokenizer.advance()
         
-        # Handling the expression
+        # Handling the expression, we will not validate whether the expression's
+        # output type is the same as the variable's type, as Jack is defined as weakly typed
         self.compile_expression()
+
+        # At this stage we expect that the stack topmost value is the value to be assigned
+        self._vm_assign_variable_value(var_symbol)
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
@@ -451,12 +492,13 @@ class CompilationEngine:
         int_val = self._tokenizer.int_val()
         if HACK_MIN_INT > int_val or HACK_MAX_INT < int_val:
             raise ValueError(f"CompilationEngine: Integer constant out of range: {int_val}")
-        self._insert_int_const(self._tokenizer.int_val())
+        self._vm_writer.write_push(VMMemorySegments.CONST, int_val)
         self._tokenizer.advance()
 
     def compile_string_constant_term(self) -> None:
         """Compiles a string constant term."""
-        self._insert_string_const(self._tokenizer.string_val())
+        string_val = self._tokenizer.string_val()
+        self._os_api.new_string(string_val)
         self._tokenizer.advance()
 
     def compile_keyword_term(self) -> None:
@@ -607,7 +649,7 @@ class CompilationEngine:
         
         # If it's a keyword, it should be int, char, or boolean (or void if with_void is True)
         if ('KEYWORD' == self._tokenizer.token_type()) and \
-           (self._tokenizer.keyword() not in (JackVariableTypes + ([JackKeywords.VOID] if with_void else []))):
+           (self._tokenizer.keyword() not in (JackVariableTypes.ALL + ([JackKeywords.VOID] if with_void else []))):
             raise ValueError(f"CompilationEngine: Expected int, char, or boolean for type, got {self._tokenizer.keyword()}")
         
         if 'KEYWORD' == self._tokenizer.token_type():
@@ -615,6 +657,19 @@ class CompilationEngine:
         else: # It's an identifier - If it isn't then an exception would have been raised by now
             return self._tokenizer.identifier()
         
+    def _vm_assign_variable_value(self, var_symbol: Symbol) -> None:
+        """
+        Assigns the stack topmost value to the variable, according to its kind and index.
+
+        :param var_symbol: The symbol of the variable to assign the value to.
+        """
+        if var_symbol.kind() in [VariableKinds.STATIC, VariableKinds.FIELD]:
+            self._vm_writer.write_pop(
+                CompilationEngine.SEGMENT_MAP[var_symbol.kind()], var_symbol.index())
+        else:
+            self._vm_writer.write_pop(
+                CompilationEngine.SEGMENT_MAP[var_symbol.kind()], var_symbol.index())
+
     def _open_subelement(self, tag: str) -> None:
         pass
     
