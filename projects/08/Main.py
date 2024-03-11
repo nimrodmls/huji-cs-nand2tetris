@@ -30,13 +30,11 @@ def translate_file(
 
     # First, if bootstrap code is required, we call it
     if bootstrap:
-        output_file.write(parser.get_bootstrap_code())
+        output_file.write(parser.get_bootstrap_code() + "\n")
 
     # Only then, we generate the VM-file's ASM code
-    asm_cmd = parser.get_next_command()
-    while None != asm_cmd:
-        output_file.write(asm_cmd)
-        asm_cmd = parser.get_next_command()
+    asm = parser.parse_translate()
+    output_file.write(asm + "\n")
 
 def main(in_path):
     # Parses the input path and calls translate_file on each input file.
