@@ -5,6 +5,8 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+import re
+
 from CodeWriter import CodeWriter
 from typing import Optional, TextIO
 
@@ -54,7 +56,7 @@ class Parser:
         Args:
             input_file (typing.TextIO): input file.
         """
-        self._code = input_file.read().splitlines()
+        self._code = Parser._strip_all_comments(input_file.read()).splitlines()
         self._current_command_index = 0
         self._codewriter = CodeWriter()
         self._command_handlers = {
@@ -68,36 +70,36 @@ class Parser:
             "and": self._codewriter.vm_and,
             "or": self._codewriter.vm_or,
             "not": self._codewriter.vm_not,
+            "shiftleft": self._codewriter.vm_shiftleft,
+            "shiftright": self._codewriter.vm_shiftright,
             # Stack-manipulating Commands
             "push": lambda segment, address: self._codewriter.vm_push(segment, int(address)),
             "pop": lambda segment, address: self._codewriter.vm_pop(segment, int(address)),
         }
 
-    def get_next_command(self) -> Optional[str]:
+    def parse_translate(self):
         """
-        Replaces has_more_commands() & advance() from the original template.
         """
-        # Return None if we reached the end of the file
-        if self._current_command_index >= len(self._code):
-            return None
+        asm = []
+        for command in self._code:
+            command_tokens = command.split()
+
+            # This command is empty, so we skip it
+            if 0 == len(command_tokens):
+                continue
+
+            # The first element of the command tokens is the VM command,
+            # hence we get the proper handler for it, and call it, with the
+            # rest of the command tokens, if available
+            asm += self._command_handlers[command_tokens[0]](*command_tokens[1:])
         
-        # Iterating until we find a non-comment line
-        ready_code = Parser._strip_comment(self._code[self._current_command_index])
-        while 0 == len(ready_code):
-            self._current_command_index += 1
-            ready_code = Parser._strip_comment(self._code[self._current_command_index])
-        ready_code = ready_code.split()
+        return "\n".join(asm)
 
-        # If we haven't found another line of code, after the comment, we will get
-        # here and return None, means we got to the end of the file
-        if 0 == len(ready_code):
-            return None
-
-        self._current_command_index += 1
-
-        # The first element of ready_code is the VM command,
-        # hence we get the proper handler for it, and call it
-        return self._command_handlers[ready_code[0]](*ready_code[1:])
+    @staticmethod
+    def _strip_all_comments(code):
+        """
+        """
+        return re.sub(r"//.*?$", " ", code, flags=re.MULTILINE)
 
     @staticmethod
     def _strip_comment(code_line: str) -> str:
