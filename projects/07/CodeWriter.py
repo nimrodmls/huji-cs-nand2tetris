@@ -9,14 +9,65 @@ from typing import List
 
 def relation_asm(relation, count):
     """
+    Hack ASM code for (in)equalities
     """
+    # y is the topmost value, x is the value below it,
+    # An (in)equality is true (-1) if x ~ y, and false otherwise (0)
+    # with ~ being either < or >
     return [
         "@SP",
         "M=M-1",
         "A=M",
         "D=M",
-        "A=A-1",
+        "@R15",
+        "M=D", # Save the value of y in R15, next we load X into D
+        "@SP",
+        "A=M-1",
+        "D=M",
+        "@R14",
+        "M=D", # Save the value of x in R14
+        
+        # Save the sign of x in R13
+        f"@NEGATIVE_X_{relation}_{count}",
+        "D;JLT", # If D < 0, we jump to NEGATIVE
+        f"@R13",
+        "M=0", # If D >= 0, we set the value of the register to 0
+        f"@SAVE_SIGN_Y_{relation}_{count}",
+        "0;JMP", 
+        f"(NEGATIVE_X_{relation}_{count})", # If D < 0, we set the value of the register to -1
+        f"@R13",
+        "M=-1",
+
+        # Save the sign of y in D
+        f"(SAVE_SIGN_Y_{relation}_{count})",
+        # First loading y
+        "@R15",
+        "D=M",
+        f"@NEGATIVE_Y_{relation}_{count}",
+        "D;JLT", # If D < 0, we jump to NEGATIVE
+        "D=0", # If D >= 0, we set the value of the register to 0
+        f"@COMPARE_SIGNS_{relation}_{count}",
+        "0;JMP",  # We saved both signs, now we compare them
+        f"(NEGATIVE_Y_{relation}_{count})", # If D < 0, we set the value of the register to -1
+        "D=-1",
+        
+        # At this point, we have the signs of x in R13 and of y in D
+        # We check whether the signs and the same by subtracting them
+        f"(COMPARE_SIGNS_{relation}_{count})",
+        "@R13",
+        "D=D-M", # Subtracting the sign of y from the sign of x
+        f"@COMPARE_ELEMENTS_{relation}_{count}",
+        "D;JNE", # If the signs are inequal, we can compare directly
+
+        # Otherwise, they are with equal signs, we need to subtract x and y
+        # at this point we don't need the signs saved at R13 and D
+        "@R15",
+        "D=M", # Loading y into D
+        "@R14",
         "D=D-M",
+
+        # Now we compare regularly
+        f"(COMPARE_ELEMENTS_{relation}_{count})",
         f"@IS_TRUE_{relation}_{count}",
         f"D;{relation}",
         "D=0",
@@ -27,7 +78,7 @@ def relation_asm(relation, count):
         f"(SET_RESULT_{relation}_{count})",
         "@SP",
         "A=M-1",
-        "M=D"
+        "M=D",
     ]
 
 def get_dynamic_segment_addr_asm(segment, address):
@@ -126,13 +177,57 @@ class CodeWriter:
             "A=M-1",
             "M=-M"
         ]
+    
+    def vm_shiftleft(self) -> str:
+        """
+        Returning the Hack ASM for left-shifting the topmost item in the stack
+        (unary operation)
+        """
+        return [
+            "// shiftleft",
+            "@SP",
+            "A=M-1",
+            "M=M<<"
+        ]
+    
+    def vm_shiftright(self) -> str:
+        """
+        Returning the Hack ASM for right-shifting the topmost item in the stack
+        (unary operation)
+        """
+        return [
+            "// shiftright",
+            "@SP",
+            "A=M-1",
+            "M=M>>"
+        ]
 
     def vm_eq(self) -> str:
         """
         Returning Hack ASM for equality validation between the topmost 2
         items in the stack
         """
-        asm_code = ["// eq"] + relation_asm(relation="JEQ", count=self._eq_counter)
+        # This is an optimzed version of the relation_asm function
+        asm_code = [
+            "// eq",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            "A=A-1",
+            "D=D-M",
+            f"@IS_TRUE_JEQ_{self._eq_counter}",
+            f"D;JEQ",
+            "D=0",
+            f"@SET_RESULT_JEQ_{self._eq_counter}",
+            "0;JMP",
+            f"(IS_TRUE_JEQ_{self._eq_counter})",
+            "D=-1",
+            f"(SET_RESULT_JEQ_{self._eq_counter})",
+            "@SP",
+            "A=M-1",
+            "M=D"
+        ]
         self._eq_counter += 1
         return asm_code
 
