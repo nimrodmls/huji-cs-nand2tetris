@@ -6,14 +6,14 @@ as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
 import typing
-from JackConstants import JackVariableTypes
+from JackConstants import JackVariableTypes, JackKeywords
 
 class VariableKinds:
     """
     A class to hold the different kinds of symbols in the Jack language.
     """
-    STATIC = "STATIC"
-    FIELD = "FIELD"
+    STATIC = JackKeywords.STATIC
+    FIELD = JackKeywords.FIELD
     ARG = "ARG"
     VAR = "VAR"
     
@@ -72,6 +72,15 @@ class SymbolTable:
         Returns an iterator over all the symbols in the symbol table.
         """
         return iter(self._class_symbols.values()) + iter(self._subroutine_symbols.values())
+    
+    def __repr__(self) -> str:
+        """
+        Pretty prints the symbol table.
+        """
+        out = 'Symbol Table:\n'
+        for symbol in self:
+            out += f"\t{symbol}\n"
+        return out
 
     def define(self, name: str, type: str, kind: str) -> None:
         """Defines a new identifier of a given name, type and kind and assigns 
@@ -91,7 +100,22 @@ class SymbolTable:
         elif kind in VariableKinds.SUBROUTINE_KINDS:
             self._subroutine_symbols[name] = symbol
         else:
-            raise ValueError(f"SymbolTable: Encountered unknown kind: {kind}")
+            raise ValueError(f"SymbolTable: Encountered unknown kind - {kind}")
+        
+    def get_symbol(self, name: str) -> Symbol:
+        """
+        Returns the symbol associated with the given name.
+        The symbol is searched for in the subroutine scope first, and then in
+        the class scope.
+
+        :param name: the name of the symbol to retrieve.
+        """
+        if name in self._subroutine_symbols:
+            return self._subroutine_symbols[name]
+        elif name in self._class_symbols:
+            return self._class_symbols[name]
+        else:
+            raise ValueError(f"SymbolTable: Encountered unknown symbol - {name}")
 
     def var_count(self, kind: str) -> int:
         """
