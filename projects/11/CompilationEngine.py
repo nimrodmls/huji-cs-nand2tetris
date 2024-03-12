@@ -29,7 +29,7 @@ class OS_API:
         for char in string_val:
             # We assume that the Hack VM has the same ASCII values as the ASCII table
             self._vm_writer.write_push(VMMemorySegments.CONST, ord(char))
-            self._vm_writer.write_call('String.appendChar', 1)
+            self._vm_writer.write_call('String.appendChar', 2)
 
     def math_mult(self) -> None:
         """
@@ -75,9 +75,9 @@ class CompilationEngine:
         JackSymbols.PIPE: VMArithmeticCommands.OR,
         JackSymbols.LESS_THAN: VMArithmeticCommands.LT,
         JackSymbols.GREATER_THAN: VMArithmeticCommands.GT,
-        JackSymbols.EQUALS: VMArithmeticCommands.EQ
-        # JackSymbols.ASTERISK - Handled separately via OS API
-        # JackSymbols.SLASH - Handled separately via OS API
+        JackSymbols.EQUALS: VMArithmeticCommands.EQ,
+        JackSymbols.ASTERISK: None, # Handled separately via OS API
+        JackSymbols.SLASH: None # Handled separately via OS API
     }
     
     # Mapping between the Jack variable types and the VM host memory segments
@@ -157,7 +157,6 @@ class CompilationEngine:
             raise ValueError("CompilationEngine: Expected 'static' or 'field' keyword for class variables")
         
         var_kind = self._tokenizer.keyword()
-        self._insert_keyword(self._tokenizer.keyword())
         self._tokenizer.advance()
 
         # Get the type
@@ -331,7 +330,6 @@ class CompilationEngine:
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, 
                               "CompilationEngine: Expected ';' symbol after subroutine call")
-        self._insert_symbol(JackSymbols.LINE_TERMINATOR)
         self._tokenizer.advance()
 
     def compile_let(self) -> None:
@@ -350,7 +348,7 @@ class CompilationEngine:
         # either equal sign or the beginning of array access expression
         if 'SYMBOL' == self._tokenizer.token_type():
             if JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol():
-                if 'Array' != var_symbol.type():
+                if 'Array' != var_symbol.type:
                     raise ValueError("CompilationEngine: Array access is only allowed for array variables")
                 is_array = True
                 # The expression inside the square brackets is evaluated 
@@ -384,20 +382,17 @@ class CompilationEngine:
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
-        self._insert_symbol(self._tokenizer.symbol())
         self._tokenizer.advance()
 
     def compile_while(self) -> None:
         """Compiles a while statement."""
         # Handling the while keyword itself
         self._validate_keyword(JackKeywords.WHILE, "CompilationEngine: Expected 'while' keyword")
-        self._insert_keyword(JackKeywords.WHILE)
         self._tokenizer.advance()
 
         # Handling the opening round bracket
         self._validate_symbol(JackSymbols.OPENING_PARENTHESIS, 
                               "CompilationEngine: Expected '(' symbol after while keyword")
-        self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
         self._vm_writer.write_label(f"WHILE_EXP{self._while_count}")
@@ -413,13 +408,11 @@ class CompilationEngine:
         # Handling the closing round bracket
         self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                               "CompilationEngine: Expected ')' symbol after expression")
-        self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
         self._tokenizer.advance()
         
         # Handling the opening curly brace
         self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
                               "CompilationEngine: Expected '{' symbol after while expression")
-        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
         self._tokenizer.advance()
 
         # Handling the statements
@@ -433,7 +426,6 @@ class CompilationEngine:
         # Handling the closing curly brace
         self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
                               "CompilationEngine: Expected '}' symbol after while statements")
-        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
         self._tokenizer.advance()
 
     def compile_return(self) -> None:
@@ -446,13 +438,14 @@ class CompilationEngine:
         if (JackKeywords.VOID == self._current_subroutine.return_type):
             self._vm_writer.write_push(VMMemorySegments.CONST, 0)
 
-        if JackSymbols.LINE_TERMINATOR != self._tokenizer.symbol():
+        if ('SYMBOL' != self._tokenizer.token_type()) or \
+           (JackSymbols.LINE_TERMINATOR != self._tokenizer.symbol()):
             # Void functions should have empty expression, if we reached here it isn't the case
             if (JackKeywords.VOID == self._current_subroutine.return_type):
                 raise ValueError("CompilationEngine: Void function cannot return a value")
             # Constructor must return 'this'
             elif ('KEYWORD' == self._tokenizer.token_type()) and \
-                 (JackKeywords.THIS != self._tokenizer.keyword) and \
+                 (JackKeywords.THIS != self._tokenizer.keyword()) and \
                  (JackKeywords.CONSTRUCTOR == self._current_subroutine.kind):
                 raise ValueError("CompilationEngine: Constructor must return 'this'")
             else: # Otherwise it's good to go
@@ -460,7 +453,6 @@ class CompilationEngine:
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
-        self._insert_symbol(self._tokenizer.symbol())
         self._tokenizer.advance()
 
         self._vm_writer.write_return()
@@ -519,7 +511,6 @@ class CompilationEngine:
             # Handling the opening curly brace
             self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
                                   "CompilationEngine: Expected '{' symbol after else keyword")
-            self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
             self._tokenizer.advance()
 
             # Handling the statements
@@ -528,7 +519,6 @@ class CompilationEngine:
             # Handling the closing curly brace
             self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
                                   "CompilationEngine: Expected '}' symbol after else statements")
-            self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
             self._tokenizer.advance()
 
             # Adding the end of the if statement label, for the true condition
@@ -706,6 +696,7 @@ class CompilationEngine:
 
         # TODO: Edge case of nonexisting method, function or ctor
 
+        param_count = 0
         try:
             # If the variable is in the symbol table, then ref is a variable name
             var = self._symbol_table[ref]
@@ -719,7 +710,7 @@ class CompilationEngine:
             # we don't check if that class really exists, it should be checked by some sort of a linker
             subroutine_name = f"{ref}.{subroutine_name}"            
 
-        param_count = self.compile_expression_list()
+        param_count += self.compile_expression_list()
         self._vm_writer.write_call(subroutine_name, param_count)
         return subroutine_name
 
@@ -760,14 +751,12 @@ class CompilationEngine:
         """
         self._validate_symbol(JackSymbols.OPENING_SQUARE_BRACKET, 
                               f"CompilationEngine: Expected [ symbol after variable name, got {self._tokenizer.symbol()}")
-        self._insert_symbol(JackSymbols.OPENING_SQUARE_BRACKET)
         self._tokenizer.advance()
 
         self.compile_expression()
 
         self._validate_symbol(JackSymbols.CLOSING_SQUARE_BRACKET, 
                               f"CompilationEngine: Expected ] symbol after expression, got {self._tokenizer.symbol()}")
-        self._insert_symbol(JackSymbols.CLOSING_SQUARE_BRACKET)
         self._tokenizer.advance()
 
     def _validate_symbol(self, symbol: str, err_msg: str) -> None:
@@ -854,12 +843,12 @@ class CompilationEngine:
 
         :param var_symbol: The symbol of the variable to assign the value to.
         """
-        if var_symbol.kind() in [VariableKinds.STATIC, VariableKinds.FIELD]:
+        if var_symbol.kind in [VariableKinds.STATIC, VariableKinds.FIELD]:
             self._vm_writer.write_pop(
-                CompilationEngine.SEGMENT_MAP[var_symbol.kind()], var_symbol.index())
+                CompilationEngine.SEGMENT_MAP[var_symbol.kind], var_symbol.index)
         else:
             self._vm_writer.write_pop(
-                CompilationEngine.SEGMENT_MAP[var_symbol.kind()], var_symbol.index())
+                CompilationEngine.SEGMENT_MAP[var_symbol.kind], var_symbol.index)
             
     def _compile_binary_vm_arithmetic(self, op: str) -> None:
         """
@@ -867,12 +856,14 @@ class CompilationEngine:
         at the top of the stack once the routine is called.
         Negation is not handled here - Should be handled separately.
         """
-        if op in CompilationEngine.JACK_BINARY_OP_TO_VM_OP:
-            self._vm_writer.write_arithmetic(CompilationEngine.JACK_BINARY_OP_TO_VM_OP[op])
-        elif JackSymbols.ASTERISK == op: # Multiplication
+        # Order is important since multiplication and division get special treatment
+        if JackSymbols.ASTERISK == op: # Multiplication
             self._os_api.math_mult()
         elif JackSymbols.SLASH == op: # Division
             self._os_api.math_div()
+        elif (op in CompilationEngine.JACK_BINARY_OP_TO_VM_OP) and \
+             (CompilationEngine.JACK_BINARY_OP_TO_VM_OP[op] is not None):
+            self._vm_writer.write_arithmetic(CompilationEngine.JACK_BINARY_OP_TO_VM_OP[op])
         else:
             raise ValueError(f"CompilationEngine: Unexpected binary operator {op}")
 
@@ -885,28 +876,3 @@ class CompilationEngine:
             self._vm_writer.write_arithmetic(CompilationEngine.JACK_UNARY_OP_TO_VM_OP[op])
         else:
             raise ValueError(f"CompilationEngine: Unexpected unary operator {op}")
-
-    def _open_subelement(self, tag: str) -> None:
-        pass
-    
-    def _restore_subelement(self, previous_element) -> None:
-        pass
-
-    def _insert_keyword(self, keyword: str) -> None:
-        pass
-        
-    def _insert_symbol(self, symbol: str) -> None:
-        pass    
-
-    def _insert_identifier(self, identifier: str) -> None:
-        pass
-
-    def _insert_int_const(self, int_const: str) -> None:
-        pass
-        
-    def _insert_string_const(self, string_const: str) -> None:
-        pass
-
-    @staticmethod
-    def _insert_to_xml(root, tag: str, text: str) -> None:
-        pass

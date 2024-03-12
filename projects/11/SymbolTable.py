@@ -132,7 +132,6 @@ class SymbolTable:
             kind (str): the kind of the new identifier, can be:
             "STATIC", "FIELD", "ARG", "VAR".
         """
-        self._var_count[kind] += 1
         symbol = Symbol(name, type, kind, self.var_count(kind))
         if kind in VariableKinds.CLASS_KINDS:
             self._class_symbols[name] = symbol
@@ -140,6 +139,7 @@ class SymbolTable:
             self._subroutine_symbols[name] = symbol
         else:
             raise ValueError(f"SymbolTable: Encountered unknown kind - {kind}")
+        self._var_count[kind] += 1
         
     def get_symbol(self, name: str) -> Symbol:
         """
