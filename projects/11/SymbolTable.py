@@ -42,6 +42,25 @@ class Symbol:
     def __repr__(self) -> str:
         return f"Symbol({self.name}, {self.type}, {self.kind}, {self.index})"
 
+class Subroutine:
+    """
+    """
+
+    def __init__(self, name: str, return_type: str, kind: str) -> None:
+        """
+        Args:
+            name (str): the name of the new subroutine.
+            return_type (str): the return type of the new subroutine.
+            kind (str): the kind of the new subroutine, can be:
+            "CONSTRUCTOR", "FUNCTION", "METHOD".
+        """
+        self.name = name
+        self.return_type = return_type
+        self.kind = kind
+
+    def __repr__(self) -> str:
+        return f"Subroutine({self.name}, {self.return_type}, {self.kind})"
+
 class SymbolTable:
     """A symbol table that associates names with information needed for Jack
     compilation: type, kind and running index. The symbol table has two nested

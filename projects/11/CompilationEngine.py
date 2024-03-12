@@ -9,7 +9,7 @@ import typing
 import JackTokenizer
 
 from JackConstants import JackKeywords, JackSymbols, JackVariableTypes, HACK_MIN_INT, HACK_MAX_INT
-from SymbolTable import Symbol, SymbolTable, VariableKinds
+from SymbolTable import Symbol, Subroutine, SymbolTable, VariableKinds
 from VMWriter import VMMemorySegments, VMArithmeticCommands, VMWriter
 
 class OS_API:
@@ -44,6 +44,13 @@ class OS_API:
         The function expects those to already be on the stack.
         """
         self._vm_writer.write_call('Math.divide', 2)
+
+    def memory_alloc(self) -> None:
+        """
+        Allocates memory for a new object.
+        The size of the object (i.e. amount of fields) is expected to be on the stack.
+        """
+        self._vm_writer.write_call('Memory.alloc', 1)
 
 class CompilationEngine:
     """
@@ -96,11 +103,14 @@ class CompilationEngine:
         # Saves the current subroutine type depending on the context
         # it is updated when a new subroutine is being compiled and it affects
         # how certain statements within are being compiled
-        self._current_subroutine_ctx = None
+        self._current_subroutine: Subroutine = None
         # Saves all the subroutines in the class, and their types
         self._subroutines = {}
         # Saves the current class name
         self._class_name = None
+        # Saves the current if & while count, for unique labels
+        self._while_count = 0
+        self._if_count = 0
         
     def finalize(self):
         self._symbol_table.print_class_symbols()
@@ -165,7 +175,7 @@ class CompilationEngine:
         """
         # Expecting the constructor, function, or method keyword, 
         # and Setting the context accordingly
-        self._current_subroutine_ctx = self._tokenizer.keyword()
+        subroutine_kind = self._tokenizer.keyword()
         self._tokenizer.advance()
 
         # Get the return type
@@ -175,6 +185,8 @@ class CompilationEngine:
         # Get the subroutine name
         func_name = self._tokenizer.identifier()
         self._tokenizer.advance()
+
+        self._current_subroutine = Subroutine(func_name, ret_type, subroutine_kind)
 
         # Starting the subroutine scope for the symbol table
         with self._symbol_table:
@@ -192,7 +204,7 @@ class CompilationEngine:
                                 "CompilationEngine: Expected ')' symbol after subroutine parameter list")
             self._tokenizer.advance()
 
-            self.compile_subroutine_body(func_name)
+            self.compile_subroutine_body()
 
             # TODO: Remove
             self._symbol_table.print_subroutine_symbols()
@@ -219,7 +231,7 @@ class CompilationEngine:
             if JackSymbols.COMMA == self._tokenizer.symbol():
                 self._tokenizer.advance()
 
-    def compile_subroutine_body(self, subroutine_name: str) -> None:
+    def compile_subroutine_body(self) -> None:
         """
         Compiles the body of a subroutine (variable declarations, and then statements)
         """
@@ -236,8 +248,20 @@ class CompilationEngine:
         # Write the function declaration - At this stage we know how many local
         # variables we have, so it's possible to declare
         self._vm_writer.write_function(
-            f"{self._class_name}.{subroutine_name}", 
+            f"{self._class_name}.{self._current_subroutine.name}", 
             self._symbol_table.var_count(VariableKinds.VAR))
+        
+        if JackKeywords.METHOD == self._current_subroutine.kind:
+            # For methods, the first argument is always 'this'
+            self._vm_writer.write_push(VMMemorySegments.ARG, 0)
+            self._vm_writer.write_pop(VMMemorySegments.POINTER, 0)
+        elif JackKeywords.CONSTRUCTOR == self._current_subroutine.kind:
+            # For constructors, we allocate memory for the object
+            self._vm_writer.write_push(VMMemorySegments.CONST, 
+                                       self._symbol_table.var_count(VariableKinds.FIELD))
+            self._os_api.memory_alloc()
+            # We set the 'this' pointer according to the returned value of the memory allocation
+            self._vm_writer.write_pop(VMMemorySegments.POINTER, 0)
 
         # Compile the statements
         self.compile_statements()
@@ -321,13 +345,21 @@ class CompilationEngine:
         var_symbol = self._symbol_table[self._tokenizer.identifier()]
         self._tokenizer.advance()
 
+        is_array = False
         # Making sure a symbol appears after the variable name, since it must be
         # either equal sign or the beginning of array access expression
         if 'SYMBOL' == self._tokenizer.token_type():
             if JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol():
                 if 'Array' != var_symbol.type():
                     raise ValueError("CompilationEngine: Array access is only allowed for array variables")
+                is_array = True
+                # The expression inside the square brackets is evaluated 
+                # and the result is pushed to the top of stack
                 self._handle_array_access()
+                # Pushing the base address of the array to the stack
+                self._vm_writer.write_push(CompilationEngine.SEGMENT_MAP[var_symbol.kind], var_symbol.index)
+                # Adding the array base address to the requested index
+                self._vm_writer.write_arithmetic(VMArithmeticCommands.ADD)
             elif JackSymbols.EQUALS != self._tokenizer.symbol(): # It's not a [ nor =
                 raise ValueError(f"CompilationEngine: Expected [ or =, got {self._tokenizer.symbol()}")
             
@@ -340,8 +372,15 @@ class CompilationEngine:
         # output type is the same as the variable's type, as Jack is defined as weakly typed
         self.compile_expression()
 
-        # At this stage we expect that the stack topmost value is the value to be assigned
-        self._vm_assign_variable_value(var_symbol)
+        # Assigning the value to the variable
+        if is_array: # If the variable is an array then it receives special treatment
+            self._vm_writer.write_pop(VMMemorySegments.TEMP, 0)
+            self._vm_writer.write_pop(VMMemorySegments.POINTER, 1)
+            self._vm_writer.write_push(VMMemorySegments.TEMP, 0)
+            self._vm_writer.write_pop(VMMemorySegments.THAT, 0)
+        else:
+            # At this stage we expect that the stack topmost value is the value to be assigned
+            self._vm_assign_variable_value(var_symbol)
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
@@ -361,8 +400,15 @@ class CompilationEngine:
         self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
-        # Handling the expression
+        self._vm_writer.write_label(f"WHILE_EXP{self._while_count}")
+
+        # Handling the expression - The value would be in top of the stack
         self.compile_expression()
+
+        # If the expression is false, we jump to the end of the while loop,
+        # otherwise we continue to the statements
+        self._vm_writer.write_arithmetic(VMArithmeticCommands.NOT)
+        self._vm_writer.write_if_goto(f"WHILE_END{self._while_count}")
 
         # Handling the closing round bracket
         self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
@@ -379,6 +425,11 @@ class CompilationEngine:
         # Handling the statements
         self.compile_statements()
 
+        # Unconditionally jump back to the beginning of the 
+        # while expression, to evaluate the expression again
+        self._vm_writer.write_goto(f"WHILE_EXP{self._while_count}")
+        self._vm_writer.write_label(f"WHILE_END{self._while_count}")
+
         # Handling the closing curly brace
         self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
                               "CompilationEngine: Expected '}' symbol after while statements")
@@ -389,45 +440,60 @@ class CompilationEngine:
         """Compiles a return statement."""
         # Handling the return keyword itself
         self._validate_keyword(JackKeywords.RETURN, "CompilationEngine: Expected 'return' keyword")
-        self._insert_keyword(JackKeywords.RETURN)
         self._tokenizer.advance()
 
-        # Handling the expression
-        if ('SYMBOL' != self._tokenizer.token_type()) or \
-           (JackSymbols.LINE_TERMINATOR != self._tokenizer.symbol()):
-            self.compile_expression()
+        # Handling the expression, the result would be in the top of the stack
+        if (JackKeywords.VOID == self._current_subroutine.return_type):
+            self._vm_writer.write_push(VMMemorySegments.CONST, 0)
+
+        if JackSymbols.LINE_TERMINATOR != self._tokenizer.symbol():
+            # Void functions should have empty expression, if we reached here it isn't the case
+            if (JackKeywords.VOID == self._current_subroutine.return_type):
+                raise ValueError("CompilationEngine: Void function cannot return a value")
+            # Constructor must return 'this'
+            elif ('KEYWORD' == self._tokenizer.token_type()) and \
+                 (JackKeywords.THIS != self._tokenizer.keyword) and \
+                 (JackKeywords.CONSTRUCTOR == self._current_subroutine.kind):
+                raise ValueError("CompilationEngine: Constructor must return 'this'")
+            else: # Otherwise it's good to go
+                self.compile_expression()
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, "CompilationEngine: Expected line termination")
         self._insert_symbol(self._tokenizer.symbol())
         self._tokenizer.advance()
 
+        self._vm_writer.write_return()
+
     def compile_if(self) -> None:
-        """Compiles a if statement, possibly with a trailing else clause."""
+        """
+        Compiles a if statement, possibly with a trailing else clause
+        """
         # Handling the if keyword itself
         self._validate_keyword(JackKeywords.IF, "CompilationEngine: Expected 'if' keyword")
-        self._insert_keyword(JackKeywords.IF)
         self._tokenizer.advance()
 
         # Handling the opening round bracket
         self._validate_symbol(JackSymbols.OPENING_PARENTHESIS, 
                               "CompilationEngine: Expected '(' symbol after if keyword")
-        self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
         # Handling the expression
         self.compile_expression()
 
+        # If the expression is false, we jump to the end of the if statement,
+        # otherwise we continue to the statements
+        self._vm_writer.write_arithmetic(VMArithmeticCommands.NOT)
+        self._vm_writer.write_if_goto(f"IF_FALSE{self._if_count}")
+
         # Handling the closing round bracket
         self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                               "CompilationEngine: Expected ')' symbol after expression")
-        self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
         self._tokenizer.advance()
 
         # Handling the opening curly brace
         self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
                               "CompilationEngine: Expected '{' symbol after if expression")
-        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
         self._tokenizer.advance()
 
         # Handling the statements
@@ -436,14 +502,19 @@ class CompilationEngine:
         # Handling the closing curly brace
         self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
                               "CompilationEngine: Expected '}' symbol after if statements")
-        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
         self._tokenizer.advance()
         
         # Handling the possibility of an else clause
         if ('KEYWORD' == self._tokenizer.token_type()) and \
            (JackKeywords.ELSE == self._tokenizer.keyword()):
-            self._insert_keyword(JackKeywords.ELSE)
             self._tokenizer.advance()
+
+            # If we reached here, there is an else clause and the true condition
+            # therefore the else should not execute and we jump to the end of the if statement
+            self._vm_writer.write_goto(f"IF_END{self._if_count}")
+
+            # If there is an else clause, false condition in the if statement jumps here
+            self._vm_writer.write_label(f"IF_FALSE{self._if_count}")
 
             # Handling the opening curly brace
             self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
@@ -459,6 +530,14 @@ class CompilationEngine:
                                   "CompilationEngine: Expected '}' symbol after else statements")
             self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
             self._tokenizer.advance()
+
+            # Adding the end of the if statement label, for the true condition
+            self._vm_writer.write_label(f"IF_END{self._if_count}")
+        else:
+            # Otherwise a else clause doesn't exist, and the false condition jumps here,
+            # to the end of the if statement
+            self._vm_writer.write_label(f"IF_FALSE{self._if_count}")
+
 
     def compile_expression(self) -> None:
         """Compiles an expression."""
@@ -511,7 +590,16 @@ class CompilationEngine:
         # Handling the possibility of an array access
         if ('SYMBOL' == self._tokenizer.token_type()) and \
            (JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol()):
+            # The expression inside the square brackets is evaluated 
+            # and the result is pushed to the top of stack
             self._handle_array_access()
+            # Adding the array base address to the requested index
+            var = self._symbol_table[identifier]
+            self._vm_writer.write_push(CompilationEngine.SEGMENT_MAP[var.kind], var.index)
+            self._vm_writer.write_arithmetic(VMArithmeticCommands.ADD)
+            # Placing the value of the array entry at the top of the stack
+            self._vm_writer.write_pop(VMMemorySegments.POINTER, 1)
+            self._vm_writer.write_push(VMMemorySegments.THAT, 0)
 
         # Handling the possibility of a subroutine call - To the current class,
         # access to 'this' is added implicitly
@@ -527,7 +615,7 @@ class CompilationEngine:
         else:
             # If it's not an array access or a subroutine call, then it's a variable. 
             # We find it in memory and push it to the top of the stack.
-            var = self._symbol_table.get_symbol(identifier)
+            var = self._symbol_table[identifier]
             self._vm_writer.write_push(CompilationEngine.SEGMENT_MAP[var.kind], var.index)
 
     def compile_integer_constant_term(self) -> None:
@@ -594,7 +682,7 @@ class CompilationEngine:
         """
         # If we are currently compiling a static function, we cannot call a method
         # and all static functions should implicitly be called by ref to the class
-        if JackKeywords.FUNCTION == self._current_subroutine_ctx:
+        if JackKeywords.FUNCTION == self._current_subroutine.kind:
             raise ValueError("CompilationEngine: Attempted method call in a static function context")
         # TODO: Edge case of calling ctor from a method
             
@@ -620,7 +708,7 @@ class CompilationEngine:
 
         try:
             # If the variable is in the symbol table, then ref is a variable name
-            var = self._symbol_table.get_symbol(ref)
+            var = self._symbol_table[ref]
             subroutine_name = f"{var.type}.{subroutine_name}"
             # Adding the implicit 'this' argument - Retrieving the variable's address
             # and pushing it to the stack as the first parameter
