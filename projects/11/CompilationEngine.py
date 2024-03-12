@@ -212,6 +212,10 @@ class CompilationEngine:
         """Compiles a (possibly empty) parameter list, not including the 
         enclosing "()".
         """
+        if self._current_subroutine.kind == JackKeywords.METHOD:
+            # Adding the 'this' pointer for methods, it's always the first argument
+            self._symbol_table.define('this', self._class_name, VariableKinds.ARG)
+
         # We expect a closing parenthesis, thus ending the parameter list
         while ('SYMBOL' != self._tokenizer.token_type()) or \
               (JackSymbols.CLOSING_PARENTHESIS != self._tokenizer.symbol()):
@@ -395,7 +399,10 @@ class CompilationEngine:
                               "CompilationEngine: Expected '(' symbol after while keyword")
         self._tokenizer.advance()
 
-        self._vm_writer.write_label(f"WHILE_EXP{self._while_count}")
+        current_while_count = self._while_count
+        self._while_count += 1 # Modify this here to allow nested while statements
+
+        self._vm_writer.write_label(f"WHILE_EXP{current_while_count}")
 
         # Handling the expression - The value would be in top of the stack
         self.compile_expression()
@@ -403,7 +410,7 @@ class CompilationEngine:
         # If the expression is false, we jump to the end of the while loop,
         # otherwise we continue to the statements
         self._vm_writer.write_arithmetic(VMArithmeticCommands.NOT)
-        self._vm_writer.write_if_goto(f"WHILE_END{self._while_count}")
+        self._vm_writer.write_if_goto(f"WHILE_END{current_while_count}")
 
         # Handling the closing round bracket
         self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
@@ -420,8 +427,8 @@ class CompilationEngine:
 
         # Unconditionally jump back to the beginning of the 
         # while expression, to evaluate the expression again
-        self._vm_writer.write_goto(f"WHILE_EXP{self._while_count}")
-        self._vm_writer.write_label(f"WHILE_END{self._while_count}")
+        self._vm_writer.write_goto(f"WHILE_EXP{current_while_count}")
+        self._vm_writer.write_label(f"WHILE_END{current_while_count}")
 
         # Handling the closing curly brace
         self._validate_symbol(JackSymbols.CLOSING_CURLY_BRACKET, 
@@ -682,7 +689,7 @@ class CompilationEngine:
         self._vm_writer.write_push(VMMemorySegments.POINTER, 0)
         param_count = self.compile_expression_list()
         # Calling the method, with the implicit 'this' argument (thus adding 1)
-        self._vm_writer.write_call(subroutine_name, param_count + 1)
+        self._vm_writer.write_call(f"{self._class_name}.{subroutine_name}", param_count + 1)
 
     def compile_subroutine_ref_call(self, ref: str) -> None:
         """
