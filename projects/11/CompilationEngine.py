@@ -27,27 +27,51 @@ class OS_API:
         self._vm_writer.write_push(VMMemorySegments.CONST, len(string_val))
         self._vm_writer.write_call('String.new', 1)
         for char in string_val:
+            # We assume that the Hack VM has the same ASCII values as the ASCII table
             self._vm_writer.write_push(VMMemorySegments.CONST, ord(char))
             self._vm_writer.write_call('String.appendChar', 1)
+
+    def math_mult(self) -> None:
+        """
+        Multiplies the top 2 values on the stack.
+        The function expects those to already be on the stack.
+        """
+        self._vm_writer.write_call('Math.multiply', 2)
+
+    def math_div(self) -> None:
+        """
+        Divides the top 2 values on the stack.
+        The function expects those to already be on the stack.
+        """
+        self._vm_writer.write_call('Math.divide', 2)
 
 class CompilationEngine:
     """
     Gets input from a JackTokenizer and emits its parsed structure into an output stream.
-    All functions with vm prefix are used to write VM commands to the output stream.
     """
 
     # All the statements in the Jack language
     JACK_STATEMENTS = [JackKeywords.DO, JackKeywords.LET, JackKeywords.WHILE, 
                        JackKeywords.RETURN, JackKeywords.IF]
     
-    # All the operators in the Jack language
-    JACK_EXPRESSION_OPS = [JackSymbols.PLUS, JackSymbols.MINUS, JackSymbols.ASTERISK,
-                            JackSymbols.SLASH, JackSymbols.AMPERSAND, JackSymbols.PIPE,
-                            JackSymbols.LESS_THAN, JackSymbols.GREATER_THAN, JackSymbols.EQUALS]
-    
-    # All the unary operators in the Jack language
-    JACK_UNARY_EXPRESSION_OPS = [JackSymbols.MINUS, JackSymbols.TILDE, 
-                                 JackSymbols.SHIFT_LEFT, JackSymbols.SHIFT_RIGHT]
+    JACK_UNARY_OP_TO_VM_OP = {
+        JackSymbols.MINUS: VMArithmeticCommands.NEG,
+        JackSymbols.TILDE: VMArithmeticCommands.NOT,
+        JackSymbols.SHIFT_LEFT: VMArithmeticCommands.SHIFTLEFT,
+        JackSymbols.SHIFT_RIGHT: VMArithmeticCommands.SHIFTRIGHT
+    }
+
+    JACK_BINARY_OP_TO_VM_OP = {
+        JackSymbols.PLUS: VMArithmeticCommands.ADD,
+        JackSymbols.MINUS: VMArithmeticCommands.SUB,
+        JackSymbols.AMPERSAND: VMArithmeticCommands.AND,
+        JackSymbols.PIPE: VMArithmeticCommands.OR,
+        JackSymbols.LESS_THAN: VMArithmeticCommands.LT,
+        JackSymbols.GREATER_THAN: VMArithmeticCommands.GT,
+        JackSymbols.EQUALS: VMArithmeticCommands.EQ
+        # JackSymbols.ASTERISK - Handled separately via OS API
+        # JackSymbols.SLASH - Handled separately via OS API
+    }
     
     # Mapping between the Jack variable types and the VM host memory segments
     SEGMENT_MAP = {
@@ -68,6 +92,15 @@ class CompilationEngine:
         self._symbol_table: SymbolTable = SymbolTable()
         self._vm_writer = VMWriter(output_stream)
         self._os_api = OS_API(self._vm_writer)
+
+        # Saves the current subroutine type depending on the context
+        # it is updated when a new subroutine is being compiled and it affects
+        # how certain statements within are being compiled
+        self._current_subroutine_ctx = None
+        # Saves all the subroutines in the class, and their types
+        self._subroutines = {}
+        # Saves the current class name
+        self._class_name = None
         
     def finalize(self):
         self._symbol_table.print_class_symbols()
@@ -78,19 +111,16 @@ class CompilationEngine:
         """
         if ('KEYWORD' != self._tokenizer.token_type()) or (JackKeywords.CLASS != self._tokenizer.keyword()):
             raise ValueError("CompilationEngine: Expected 'class' keyword")
-        
-        self._insert_keyword(JackKeywords.CLASS)
         self._tokenizer.advance()
 
         # Add the class name
-        self._insert_identifier(self._tokenizer.identifier())
+        self._class_name = self._tokenizer.identifier()
         self._tokenizer.advance()
 
-        # Add the opening curly brace
+        # Expecting the opening curly brace
         open_curly = self._tokenizer.symbol()
         if JackSymbols.OPENING_CURLY_BRACKET != open_curly:
             raise ValueError("CompilationEngine: Expected '{' symbol after class ID")
-        self._insert_symbol(JackSymbols.OPENING_CURLY_BRACKET)
         self._tokenizer.advance()
 
         # Compile the class variables
@@ -103,11 +133,10 @@ class CompilationEngine:
               (self._tokenizer.keyword() in [JackKeywords.CONSTRUCTOR, JackKeywords.FUNCTION, JackKeywords.METHOD]):
             self.compile_subroutine()
 
-        # Add the closing curly brace
+        # Expecting the closing curly brace
         close_curly = self._tokenizer.symbol()
         if JackSymbols.CLOSING_CURLY_BRACKET != close_curly:
             raise ValueError("CompilationEngine: Expected '}' symbol after class body")
-        self._insert_symbol(JackSymbols.CLOSING_CURLY_BRACKET)
         self._tokenizer.advance()
 
     def compile_class_var_dec(self) -> None:
@@ -134,16 +163,16 @@ class CompilationEngine:
         You can assume that classes with constructors have at least one field,
         you will understand why this is necessary in project 11.
         """
-        # Expecting the constructor, function, or method keyword
-        func_type = self._tokenizer.keyword()
+        # Expecting the constructor, function, or method keyword, 
+        # and Setting the context accordingly
+        self._current_subroutine_ctx = self._tokenizer.keyword()
         self._tokenizer.advance()
 
         # Get the return type
         ret_type = self._handle_var_type(with_void=True)
         self._tokenizer.advance()
 
-        # Get the subroutine name - we're not doing anything with it, 
-        # it should be in some sort of a linker
+        # Get the subroutine name
         func_name = self._tokenizer.identifier()
         self._tokenizer.advance()
 
@@ -163,7 +192,7 @@ class CompilationEngine:
                                 "CompilationEngine: Expected ')' symbol after subroutine parameter list")
             self._tokenizer.advance()
 
-            self.compile_subroutine_body()
+            self.compile_subroutine_body(func_name)
 
             # TODO: Remove
             self._symbol_table.print_subroutine_symbols()
@@ -188,10 +217,9 @@ class CompilationEngine:
 
             # Handling the separating comma, if it exists
             if JackSymbols.COMMA == self._tokenizer.symbol():
-                self._insert_symbol(JackSymbols.COMMA)
                 self._tokenizer.advance()
 
-    def compile_subroutine_body(self) -> None:
+    def compile_subroutine_body(self, subroutine_name: str) -> None:
         """
         Compiles the body of a subroutine (variable declarations, and then statements)
         """
@@ -204,6 +232,12 @@ class CompilationEngine:
         while ('KEYWORD' == self._tokenizer.token_type()) and \
               (JackKeywords.VAR == self._tokenizer.keyword()):
             self.compile_var_dec()
+
+        # Write the function declaration - At this stage we know how many local
+        # variables we have, so it's possible to declare
+        self._vm_writer.write_function(
+            f"{self._class_name}.{subroutine_name}", 
+            self._symbol_table.var_count(VariableKinds.VAR))
 
         # Compile the statements
         self.compile_statements()
@@ -254,20 +288,21 @@ class CompilationEngine:
         """Compiles a do statement."""
         # Handling the do keyword itself
         self._validate_keyword(JackKeywords.DO, "CompilationEngine: Expected 'do' keyword")
-        self._insert_keyword(JackKeywords.DO)
         self._tokenizer.advance()
 
         # Handling the first identifier token - it can be a class name, a variable name, or a subroutine name
-        self._insert_identifier(self._tokenizer.identifier())
+        identifier = self._tokenizer.identifier()
         self._tokenizer.advance()
 
         # Handling the subrountine call for a case of a class name or a variable name (by ref)
         if ('SYMBOL' == self._tokenizer.token_type()) and \
            (JackSymbols.DOT == self._tokenizer.symbol()):
-            self.compile_subroutine_ref_call()
+            self.compile_subroutine_ref_call(identifier)
+        else: # Otherwise it's a subroutine call implicitly refering to 'this'
+            self.compile_subroutine_call(identifier)
 
-        # Handling the expression list
-        self.compile_expression_list()
+        # Getting rid of the return value of the subroutine call
+        self._vm_writer.write_pop(VMMemorySegments.TEMP, 0)
 
         # Handling the line terminator
         self._validate_symbol(JackSymbols.LINE_TERMINATOR, 
@@ -430,13 +465,16 @@ class CompilationEngine:
         self.compile_term()
         # Compiling more terms if and only if there are expression operators
         while ('SYMBOL' == self._tokenizer.token_type()) and \
-              (self._tokenizer.symbol() in CompilationEngine.JACK_EXPRESSION_OPS):
-            self._insert_symbol(self._tokenizer.symbol())
+              (self._tokenizer.symbol() in CompilationEngine.JACK_BINARY_OP_TO_VM_OP.keys()):
+            op_symbol = self._tokenizer.symbol()
             self._tokenizer.advance()
             self.compile_term()
+            # At this stage, the 2 topmost values in the stack are the values to be operated on
+            self._compile_binary_vm_arithmetic(op_symbol)
 
     def compile_term(self) -> None:
-        """Compiles a term. 
+        """
+        Compiles a term. 
         This routine is faced with a slight difficulty when
         trying to decide between some of the alternative parsing rules.
         Specifically, if the current token is an identifier, the routing must
@@ -444,6 +482,9 @@ class CompilationEngine:
         A single look-ahead token, which may be one of "[", "(", or "." suffices
         to distinguish between the three possibilities. Any other token is not
         part of this term and should not be advanced over.
+
+        The result of the term is expected appear at the top of the stack once
+        the routine is done.
         """
         token_type = self._tokenizer.token_type()
         if 'INT_CONST' == token_type:
@@ -464,7 +505,7 @@ class CompilationEngine:
         Compiles an identifier term - A variable, an array entry, or a subroutine call.
         """
         # Handling the name - It MUST appear! Otherwise we got here in mysterious ways.
-        self._insert_identifier(self._tokenizer.identifier())
+        identifier = self._tokenizer.identifier()
         self._tokenizer.advance()
 
         # Handling the possibility of an array access
@@ -472,20 +513,22 @@ class CompilationEngine:
            (JackSymbols.OPENING_SQUARE_BRACKET == self._tokenizer.symbol()):
             self._handle_array_access()
 
-        # Handling the possibility of a subroutine call
+        # Handling the possibility of a subroutine call - To the current class,
+        # access to 'this' is added implicitly
         elif ('SYMBOL' == self._tokenizer.token_type()) and \
              (JackSymbols.OPENING_PARENTHESIS == self._tokenizer.symbol()):
-            self.compile_expression_list()
+            self.compile_subroutine_call(identifier)
 
         # Handling the possibility of a subroutine call for a class name or a variable name
         elif ('SYMBOL' == self._tokenizer.token_type()) and \
              (JackSymbols.DOT == self._tokenizer.symbol()):
-            self.compile_subroutine_ref_call()
-            self.compile_expression_list()
+            self.compile_subroutine_ref_call(identifier)
+
         else:
-            # If it's not an array access or a subroutine call, then it's a variable,
-            # nothing should happen in this case
-            pass
+            # If it's not an array access or a subroutine call, then it's a variable. 
+            # We find it in memory and push it to the top of the stack.
+            var = self._symbol_table.get_symbol(identifier)
+            self._vm_writer.write_push(CompilationEngine.SEGMENT_MAP[var.kind], var.index)
 
     def compile_integer_constant_term(self) -> None:
         """Compiles an integer constant term."""
@@ -502,68 +545,127 @@ class CompilationEngine:
         self._tokenizer.advance()
 
     def compile_keyword_term(self) -> None:
-        """Compiles a keyword constant term."""
-        self._insert_keyword(self._tokenizer.keyword())
+        """
+        Compiles a keyword constant term
+        Only the constants true, false, null, and this are accepted.
+        """
+        keyword = self._tokenizer.keyword()
+        # TODO: Add to Unit 7
+        # if keyword not in [JackKeywords.TRUE, JackKeywords.FALSE, JackKeywords.NULL, JackKeywords.THIS]:
+        #     raise ValueError(f"CompilationEngine: Unexpected keyword in term - {keyword}")
+        if JackKeywords.TRUE == keyword:
+            self._vm_writer.write_push(VMMemorySegments.CONST, 1)
+            self._vm_writer.write_arithmetic(VMArithmeticCommands.NEG)
+        elif JackKeywords.FALSE == keyword:
+            self._vm_writer.write_push(VMMemorySegments.CONST, 0)
+        elif JackKeywords.NULL == keyword:
+            self._vm_writer.write_push(VMMemorySegments.CONST, 0)
+        elif JackKeywords.THIS == keyword:
+            self._vm_writer.write_push(VMMemorySegments.POINTER, 0)
+        else:
+            raise ValueError(f"CompilationEngine: Unexpected keyword in term - {keyword}")
         self._tokenizer.advance()
 
     def compile_symbol_term(self) -> None:
         """Compiles a symbol term."""
         # Handling a nested expression
         if JackSymbols.OPENING_PARENTHESIS == self._tokenizer.symbol():
-            self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
-            self._tokenizer.advance()
+            self._tokenizer.advance() # Advancing past the opening parenthesis
 
             self.compile_expression()
 
             self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                                     "CompilationEngine: Expected ')' symbol after expression")
-            self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
             self._tokenizer.advance()
 
         # Handling a unary expression
-        elif self._tokenizer.symbol() in CompilationEngine.JACK_UNARY_EXPRESSION_OPS:
-            self._insert_symbol(self._tokenizer.symbol())
+        elif self._tokenizer.symbol() in CompilationEngine.JACK_UNARY_OP_TO_VM_OP.keys():
+            unary_op = self._tokenizer.symbol()
             self._tokenizer.advance()
             self.compile_term()
+            # At this stage, the topmost value in the stack is the value to be operated on
+            self._compile_unary_vm_arithmetic(unary_op)
         else:
             raise ValueError(f"CompilationEngine: Unexpected symbol {self._tokenizer.symbol()}")
 
-    def compile_subroutine_ref_call(self) -> None:
+    def compile_subroutine_call(self, subroutine_name: str) -> None:
+        """
+        Compile subroutine call implicitly refering to 'this'
+        """
+        # If we are currently compiling a static function, we cannot call a method
+        # and all static functions should implicitly be called by ref to the class
+        if JackKeywords.FUNCTION == self._current_subroutine_ctx:
+            raise ValueError("CompilationEngine: Attempted method call in a static function context")
+        # TODO: Edge case of calling ctor from a method
+            
+        # Adding all parameters and the implicit 'this' argument to the stack
+        self._vm_writer.write_push(VMMemorySegments.POINTER, 0)
+        param_count = self.compile_expression_list()
+        # Calling the method, with the implicit 'this' argument (thus adding 1)
+        self._vm_writer.write_call(subroutine_name, param_count + 1)
+
+    def compile_subroutine_ref_call(self, ref: str) -> None:
         """
         Handling the possibility of a subroutine call for a class name or a variable name.
-        If it doesn't exist, nothing would happen
+
+        :param ref: The reference to the class or the variable name
         """
-        self._insert_symbol(JackSymbols.DOT)
+        self._tokenizer.advance() # Expecting the dot symbol
+
+        # Handling the subroutine name
+        subroutine_name = self._tokenizer.identifier()
         self._tokenizer.advance()
 
-        self._insert_identifier(self._tokenizer.identifier())
-        self._tokenizer.advance()
+        # TODO: Edge case of nonexisting method, function or ctor
+
+        try:
+            # If the variable is in the symbol table, then ref is a variable name
+            var = self._symbol_table.get_symbol(ref)
+            subroutine_name = f"{var.type}.{subroutine_name}"
+            # Adding the implicit 'this' argument - Retrieving the variable's address
+            # and pushing it to the stack as the first parameter
+            param_count += 1
+            self._vm_writer.write_push(CompilationEngine.SEGMENT_MAP[var.kind], var.index)
+        except ValueError:
+            # If the variable is not in the symbol table, then it's a class name
+            # we don't check if that class really exists, it should be checked by some sort of a linker
+            subroutine_name = f"{ref}.{subroutine_name}"            
+
+        param_count = self.compile_expression_list()
+        self._vm_writer.write_call(subroutine_name, param_count)
+        return subroutine_name
 
     def compile_expression_list(self) -> None:
-        """Compiles a (possibly empty) comma-separated list of expressions."""
+        """
+        Compiles a (possibly empty) comma-separated list of expressions
+
+        :returns: The number of expressions in the list
+        """
         # Handling the opening round bracket
         self._validate_symbol(JackSymbols.OPENING_PARENTHESIS, 
                               "CompilationEngine: Expected '(' symbol after subroutine name")
-        self._insert_symbol(JackSymbols.OPENING_PARENTHESIS)
         self._tokenizer.advance()
 
+        expression_count = 0
         # Handling the expression list, only if there are expressions in it
         if ('SYMBOL' != self._tokenizer.token_type()) or \
            (JackSymbols.CLOSING_PARENTHESIS != self._tokenizer.symbol()):
 
             # Handling the first expression, then the rest if there are any (separated by commas)
             self.compile_expression()
+            expression_count += 1
             while ('SYMBOL' == self._tokenizer.token_type()) and \
-                    (JackSymbols.COMMA == self._tokenizer.symbol()):
-                self._insert_symbol(JackSymbols.COMMA)
-                self._tokenizer.advance()
+                  (JackSymbols.COMMA == self._tokenizer.symbol()):
+                self._tokenizer.advance() # Advancing past the comma
                 self.compile_expression()
+                expression_count += 1
 
         # Handling the closing round bracket
         self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
                               "CompilationEngine: Expected ')' symbol after expression list")
-        self._insert_symbol(JackSymbols.CLOSING_PARENTHESIS)
         self._tokenizer.advance()
+
+        return expression_count
 
     def _handle_array_access(self) -> None:
         """
@@ -598,9 +700,10 @@ class CompilationEngine:
 
     def _add_variable_list(self, var_kind: str, var_type: str) -> None:
         """
-        Adds a list of variable names to the XML.
+        Adds a list of variable names to the symbol table.
         The list is expected to be a comma-separated list of identifiers.
-        Advancing to the first token after the terminator.
+        Advancing to the first token after the terminator
+        .
         :param var_kind: The kind of the variable. As defined in VariableKinds.
         :param var_type: The type of the variable. As defined in JackVariableTypes.
         """
@@ -669,6 +772,31 @@ class CompilationEngine:
         else:
             self._vm_writer.write_pop(
                 CompilationEngine.SEGMENT_MAP[var_symbol.kind()], var_symbol.index())
+            
+    def _compile_binary_vm_arithmetic(self, op: str) -> None:
+        """
+        Compiles a VM arithmetic command. The values to be operated on are expected to be
+        at the top of the stack once the routine is called.
+        Negation is not handled here - Should be handled separately.
+        """
+        if op in CompilationEngine.JACK_BINARY_OP_TO_VM_OP:
+            self._vm_writer.write_arithmetic(CompilationEngine.JACK_BINARY_OP_TO_VM_OP[op])
+        elif JackSymbols.ASTERISK == op: # Multiplication
+            self._os_api.math_mult()
+        elif JackSymbols.SLASH == op: # Division
+            self._os_api.math_div()
+        else:
+            raise ValueError(f"CompilationEngine: Unexpected binary operator {op}")
+
+    def _compile_unary_vm_arithmetic(self, op: str) -> None:
+        """
+        Compiles a VM arithmetic command. The value to be operated on is expected to be
+        at the top of the stack once the routine is called.
+        """
+        if op in CompilationEngine.JACK_UNARY_OP_TO_VM_OP:
+            self._vm_writer.write_arithmetic(CompilationEngine.JACK_UNARY_OP_TO_VM_OP[op])
+        else:
+            raise ValueError(f"CompilationEngine: Unexpected unary operator {op}")
 
     def _open_subelement(self, tag: str) -> None:
         pass
