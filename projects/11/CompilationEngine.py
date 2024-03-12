@@ -473,10 +473,13 @@ class CompilationEngine:
         # Handling the expression
         self.compile_expression()
 
+        current_if_count = self._if_count
+        self._if_count += 1 # Modify this here to allow nested if statements
+
         # If the expression is false, we jump to the end of the if statement,
         # otherwise we continue to the statements
         self._vm_writer.write_arithmetic(VMArithmeticCommands.NOT)
-        self._vm_writer.write_if_goto(f"IF_FALSE{self._if_count}")
+        self._vm_writer.write_if_goto(f"IF_FALSE{current_if_count}")
 
         # Handling the closing round bracket
         self._validate_symbol(JackSymbols.CLOSING_PARENTHESIS, 
@@ -503,10 +506,10 @@ class CompilationEngine:
 
             # If we reached here, there is an else clause and the true condition
             # therefore the else should not execute and we jump to the end of the if statement
-            self._vm_writer.write_goto(f"IF_END{self._if_count}")
+            self._vm_writer.write_goto(f"IF_END{current_if_count}")
 
             # If there is an else clause, false condition in the if statement jumps here
-            self._vm_writer.write_label(f"IF_FALSE{self._if_count}")
+            self._vm_writer.write_label(f"IF_FALSE{current_if_count}")
 
             # Handling the opening curly brace
             self._validate_symbol(JackSymbols.OPENING_CURLY_BRACKET, 
@@ -522,12 +525,11 @@ class CompilationEngine:
             self._tokenizer.advance()
 
             # Adding the end of the if statement label, for the true condition
-            self._vm_writer.write_label(f"IF_END{self._if_count}")
+            self._vm_writer.write_label(f"IF_END{current_if_count}")
         else:
             # Otherwise a else clause doesn't exist, and the false condition jumps here,
             # to the end of the if statement
-            self._vm_writer.write_label(f"IF_FALSE{self._if_count}")
-
+            self._vm_writer.write_label(f"IF_FALSE{current_if_count}")
 
     def compile_expression(self) -> None:
         """Compiles an expression."""
@@ -632,8 +634,8 @@ class CompilationEngine:
         # if keyword not in [JackKeywords.TRUE, JackKeywords.FALSE, JackKeywords.NULL, JackKeywords.THIS]:
         #     raise ValueError(f"CompilationEngine: Unexpected keyword in term - {keyword}")
         if JackKeywords.TRUE == keyword:
-            self._vm_writer.write_push(VMMemorySegments.CONST, 1)
-            self._vm_writer.write_arithmetic(VMArithmeticCommands.NEG)
+            self._vm_writer.write_push(VMMemorySegments.CONST, 0)
+            self._vm_writer.write_arithmetic(VMArithmeticCommands.NOT)
         elif JackKeywords.FALSE == keyword:
             self._vm_writer.write_push(VMMemorySegments.CONST, 0)
         elif JackKeywords.NULL == keyword:

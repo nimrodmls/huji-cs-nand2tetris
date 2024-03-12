@@ -77,14 +77,14 @@ class SymbolTable:
         """
         Opens a new subroutine scope (i.e. resets the subroutine's symbol table).
         """
-        self._subroutine_symbols = {}
+        self._reset()
         return self
     
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """
         Closes the current subroutine scope (erasing the subroutine's symbol table).
         """
-        self._subroutine_symbols = {}
+        self._reset()
 
     def __getitem__(self, name: str) -> Symbol:
         """
@@ -167,50 +167,10 @@ class SymbolTable:
         """
         return self._var_count[kind]
 
-    def kind_of(self, name: str) -> str:
+    def _reset(self) -> None:
         """
-        Args:
-            name (str): name of an identifier.
-
-        Returns:
-            str: the kind of the named identifier in the current scope, or None
-            if the identifier is unknown in the current scope.
+        Resets the symbol table to its initial state.
         """
-        # Your code goes here!
-        pass
-
-    def type_of(self, name: str) -> str:
-        """
-        Args:
-            name (str):  name of an identifier.
-
-        Returns:
-            str: the type of the named identifier in the current scope.
-        """
-        # Your code goes here!
-        pass
-
-    def index_of(self, name: str) -> int:
-        """
-        Args:
-            name (str):  name of an identifier.
-
-        Returns:
-            int: the index assigned to the named identifier.
-        """
-        # Your code goes here!
-        pass
-
-if __name__ == "__main__":
-    # The following is a test for the SymbolTable class.
-    symbol_table = SymbolTable()
-    with symbol_table:
-        symbol_table.define("x", JackVariableTypes.INT, VariableKinds.VAR)
-        symbol_table.define("y", JackVariableTypes.BOOLEAN, VariableKinds.STATIC)
-        symbol_table.define("z", JackVariableTypes.CHAR, VariableKinds.FIELD)
-        print(symbol_table._class_symbols)
-        print(symbol_table._subroutine_symbols)
-
-    print("After")
-    print(symbol_table._class_symbols)
-    print(symbol_table._subroutine_symbols)
+        self._subroutine_symbols = {}
+        self._var_count[VariableKinds.ARG] = 0
+        self._var_count[VariableKinds.VAR] = 0
