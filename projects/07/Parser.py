@@ -25,7 +25,7 @@ class Parser:
     valid program, it can be translated into a stream of valid assembly 
     commands. VM commands may be separated by an arbitrary number of whitespace
     characters and comments, which are ignored. Comments begin with "//" and
-    last until the line’s end.
+    last until the line's end.
     The different parts of each VM command may also be separated by an arbitrary
     number of non-newline whitespace characters.
 
