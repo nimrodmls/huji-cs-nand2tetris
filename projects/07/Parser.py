@@ -5,8 +5,10 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
-import typing
+import re
 
+from CodeWriter import CodeWriter
+from typing import Optional, TextIO
 
 class Parser:
     """
@@ -23,7 +25,7 @@ class Parser:
     valid program, it can be translated into a stream of valid assembly 
     commands. VM commands may be separated by an arbitrary number of whitespace
     characters and comments, which are ignored. Comments begin with "//" and
-    last until the line’s end.
+    last until the line's end.
     The different parts of each VM command may also be separated by an arbitrary
     number of non-newline whitespace characters.
 
@@ -46,62 +48,66 @@ class Parser:
       - return
     """
 
-    def __init__(self, input_file: typing.TextIO) -> None:
+    COMMENT_NOTATION = "//"
+
+    def __init__(self, input_file: TextIO) -> None:
         """Gets ready to parse the input file.
 
         Args:
             input_file (typing.TextIO): input file.
         """
-        # Your code goes here!
-        # A good place to start is to read all the lines of the input:
-        # input_lines = input_file.read().splitlines()
-        pass
+        self._code = Parser._strip_all_comments(input_file.read()).splitlines()
+        self._current_command_index = 0
+        self._codewriter = CodeWriter()
+        self._command_handlers = {
+            # Arithmetic Commands
+            "add": self._codewriter.vm_add,
+            "sub": self._codewriter.vm_sub,
+            "neg": self._codewriter.vm_neg,
+            "eq": self._codewriter.vm_eq,
+            "gt": self._codewriter.vm_gt,
+            "lt": self._codewriter.vm_lt,
+            "and": self._codewriter.vm_and,
+            "or": self._codewriter.vm_or,
+            "not": self._codewriter.vm_not,
+            "shiftleft": self._codewriter.vm_shiftleft,
+            "shiftright": self._codewriter.vm_shiftright,
+            # Stack-manipulating Commands
+            "push": lambda segment, address: self._codewriter.vm_push(segment, int(address)),
+            "pop": lambda segment, address: self._codewriter.vm_pop(segment, int(address)),
+        }
 
-    def has_more_commands(self) -> bool:
-        """Are there more commands in the input?
+    def parse_translate(self):
+        """
+        """
+        asm = []
+        for command in self._code:
+            command_tokens = command.split()
 
-        Returns:
-            bool: True if there are more commands, False otherwise.
-        """
-        # Your code goes here!
-        pass
+            # This command is empty, so we skip it
+            if 0 == len(command_tokens):
+                continue
 
-    def advance(self) -> None:
-        """Reads the next command from the input and makes it the current 
-        command. Should be called only if has_more_commands() is true. Initially
-        there is no current command.
-        """
-        # Your code goes here!
-        pass
+            # The first element of the command tokens is the VM command,
+            # hence we get the proper handler for it, and call it, with the
+            # rest of the command tokens, if available
+            asm += self._command_handlers[command_tokens[0]](*command_tokens[1:])
+        
+        return "\n".join(asm)
 
-    def command_type(self) -> str:
+    @staticmethod
+    def _strip_all_comments(code):
         """
-        Returns:
-            str: the type of the current VM command.
-            "C_ARITHMETIC" is returned for all arithmetic commands.
-            For other commands, can return:
-            "C_PUSH", "C_POP", "C_LABEL", "C_GOTO", "C_IF", "C_FUNCTION",
-            "C_RETURN", "C_CALL".
         """
-        # Your code goes here!
-        pass
+        return re.sub(r"//.*?$", " ", code, flags=re.MULTILINE)
 
-    def arg1(self) -> str:
+    @staticmethod
+    def _strip_comment(code_line: str) -> str:
         """
-        Returns:
-            str: the first argument of the current command. In case of 
-            "C_ARITHMETIC", the command itself (add, sub, etc.) is returned. 
-            Should not be called if the current command is "C_RETURN".
         """
-        # Your code goes here!
-        pass
-
-    def arg2(self) -> int:
-        """
-        Returns:
-            int: the second argument of the current command. Should be
-            called only if the current command is "C_PUSH", "C_POP", 
-            "C_FUNCTION" or "C_CALL".
-        """
-        # Your code goes here!
-        pass
+        current_line = code_line
+        comment_index = current_line.find(Parser.COMMENT_NOTATION)
+        if -1 != comment_index:
+            # Strip the line from everything past the comment
+            current_line = current_line[:comment_index]
+        return current_line
