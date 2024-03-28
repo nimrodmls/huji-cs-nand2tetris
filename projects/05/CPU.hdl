@@ -39,5 +39,35 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    Mux16(a=instruction, b=aluout, sel=instruction[15], out=amuxout);
+    // Overwriting A if and only if the destination bit is turned on
+    Not(in=instruction[15], out=isAinstruction);
+    Or(a=instruction[5], b=isAinstruction, out=shouldloadareg);
+    ARegister(in=amuxout, load=shouldloadareg, out=areg);
+    // Overwriting D if and only if the destination bit is turned on & it's a C instruction
+    And(a=instruction[4], b=instruction[15], out=shouldloadD);
+    DRegister(in=aluout, load=shouldloadD, out=dreg);
+    Mux16(a=areg, b=inM, sel=instruction[12], out=compdata);
+    ALU(x=dreg, y=compdata, zx=instruction[11], nx=instruction[10], zy=instruction[9], 
+        ny=instruction[8], f=instruction[7], no=instruction[6], out=aluout, zr=iszero, ng=isneg);
+    // Outputting the ALU output to outM as well
+    Or16(a=aluout, b=false, out=outM);
+    // Outputting the current address stored in the A register
+    Or16(a=areg, b=false, out[0..14]=addressM);
+    // Validating whether we should write M or not, according to the destination bit
+    And(a=instruction[3], b=instruction[15], out=writeM);
+    // Determining whether the PC should load the current A register 
+    // (hence the CPU had just executed a jump instruction. 
+    // This is the so-called 'g' function from the lectures)
+    Not(in=isneg, out=isnotneg);
+    Not(in=iszero, out=isnotzero);
+    And(a=isnotneg, b=isnotzero, out=ispositive);
+    And(a=ispositive, b=instruction[0], out=shouldloadpc1);
+    And(a=iszero, b=instruction[1], out=shouldloadpc2);
+    And(a=isneg, b=instruction[2], out=shouldloadpc3);
+    Or(a=shouldloadpc1, b=shouldloadpc2, out=shouldloadpc4);
+    Or(a=shouldloadpc4, b=shouldloadpc3, out=shouldloadpc5);
+    And(a=shouldloadpc5, b=instruction[15], out=shouldloadpc);
+    Not(in=reset, out=notreset);
+    PC(in=areg, load=shouldloadpc, inc=notreset, reset=reset, out[0..14]=pc);
 }
