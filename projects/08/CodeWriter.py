@@ -11,7 +11,7 @@ from typing import List
 # Common ASM code #
 ###################
 
-def relation_asm(relation, count):
+def relation_asm(relation, count, uid):
     """
     Hack ASM code for (in)equalities
     """
@@ -32,35 +32,35 @@ def relation_asm(relation, count):
         "M=D", # Save the value of x in R14
         
         # Save the sign of x in R13
-        f"@NEGATIVE_X_{relation}_{count}",
+        f"@NEGATIVE_X_{relation}_{count}_{uid}",
         "D;JLT", # If D < 0, we jump to NEGATIVE
         f"@R13",
         "M=0", # If D >= 0, we set the value of the register to 0
-        f"@SAVE_SIGN_Y_{relation}_{count}",
+        f"@SAVE_SIGN_Y_{relation}_{count}_{uid}",
         "0;JMP", 
-        f"(NEGATIVE_X_{relation}_{count})", # If D < 0, we set the value of the register to -1
+        f"(NEGATIVE_X_{relation}_{count}_{uid})", # If D < 0, we set the value of the register to -1
         f"@R13",
         "M=-1",
 
         # Save the sign of y in D
-        f"(SAVE_SIGN_Y_{relation}_{count})",
+        f"(SAVE_SIGN_Y_{relation}_{count}_{uid})",
         # First loading y
         "@R15",
         "D=M",
-        f"@NEGATIVE_Y_{relation}_{count}",
+        f"@NEGATIVE_Y_{relation}_{count}_{uid}",
         "D;JLT", # If D < 0, we jump to NEGATIVE
         "D=0", # If D >= 0, we set the value of the register to 0
-        f"@COMPARE_SIGNS_{relation}_{count}",
+        f"@COMPARE_SIGNS_{relation}_{count}_{uid}",
         "0;JMP",  # We saved both signs, now we compare them
-        f"(NEGATIVE_Y_{relation}_{count})", # If D < 0, we set the value of the register to -1
+        f"(NEGATIVE_Y_{relation}_{count}_{uid})", # If D < 0, we set the value of the register to -1
         "D=-1",
         
         # At this point, we have the signs of x in R13 and of y in D
         # We check whether the signs and the same by subtracting them
-        f"(COMPARE_SIGNS_{relation}_{count})",
+        f"(COMPARE_SIGNS_{relation}_{count}_{uid})",
         "@R13",
         "D=D-M", # Subtracting the sign of y from the sign of x
-        f"@COMPARE_ELEMENTS_{relation}_{count}",
+        f"@COMPARE_ELEMENTS_{relation}_{count}_{uid}",
         "D;JNE", # If the signs are inequal, we can compare directly
 
         # Otherwise, they are with equal signs, we need to subtract x and y
@@ -71,15 +71,15 @@ def relation_asm(relation, count):
         "D=D-M",
 
         # Now we compare regularly
-        f"(COMPARE_ELEMENTS_{relation}_{count})",
-        f"@IS_TRUE_{relation}_{count}",
+        f"(COMPARE_ELEMENTS_{relation}_{count}_{uid})",
+        f"@IS_TRUE_{relation}_{count}_{uid}",
         f"D;{relation}",
         "D=0",
-        f"@SET_RESULT_{relation}_{count}",
+        f"@SET_RESULT_{relation}_{count}_{uid}",
         "0;JMP",
-        f"(IS_TRUE_{relation}_{count})",
+        f"(IS_TRUE_{relation}_{count}_{uid})",
         "D=-1",
-        f"(SET_RESULT_{relation}_{count})",
+        f"(SET_RESULT_{relation}_{count}_{uid})",
         "@SP",
         "A=M-1",
         "M=D",
@@ -248,14 +248,14 @@ class CodeWriter:
             "D=M",
             "A=A-1",
             "D=D-M",
-            f"@IS_TRUE_JEQ_{self._eq_counter}",
+            f"@IS_TRUE_JEQ_{self._eq_counter}_{self._uid}",
             f"D;JEQ",
             "D=0",
-            f"@SET_RESULT_JEQ_{self._eq_counter}",
+            f"@SET_RESULT_JEQ_{self._eq_counter}_{self._uid}",
             "0;JMP",
-            f"(IS_TRUE_JEQ_{self._eq_counter})",
+            f"(IS_TRUE_JEQ_{self._eq_counter}_{self._uid})",
             "D=-1",
-            f"(SET_RESULT_JEQ_{self._eq_counter})",
+            f"(SET_RESULT_JEQ_{self._eq_counter}_{self._uid})",
             "@SP",
             "A=M-1",
             "M=D"
@@ -268,7 +268,7 @@ class CodeWriter:
         Returning Hack ASM for (strictly) greater-than between the
         topmost 2 items in the stack
         """
-        asm_code = ["// gt"] + relation_asm(relation="JLT", count=self._gt_counter)
+        asm_code = ["// gt"] + relation_asm(relation="JLT", count=self._gt_counter, uid=self._uid)
         self._gt_counter += 1
         return asm_code
 
@@ -277,7 +277,7 @@ class CodeWriter:
         Returning the Hack ASM for (strictly) less-than between the topmost 
         2 items in the stack
         """
-        asm_code = ["// lt"] + relation_asm(relation="JGT", count=self._lt_counter)
+        asm_code = ["// lt"] + relation_asm(relation="JGT", count=self._lt_counter, uid=self._uid)
         self._lt_counter += 1
         return asm_code
 
@@ -386,7 +386,7 @@ class CodeWriter:
         # The code is simply an Hack ASM label
         return [
             f"// label {name}",
-            f"({name})"
+            f"({name}_{self._uid})"
             ]
 
     def vm_goto(self, label_name: str):
@@ -396,7 +396,7 @@ class CodeWriter:
         # and simply jumping to it
         return [
             f"// goto {label_name}",
-            f"@{label_name}",
+            f"@{label_name}_{self._uid}",
             "0;JMP"
         ]
 
@@ -413,7 +413,7 @@ class CodeWriter:
             "M=M-1",
             "A=M",
             "D=M",
-            f"@{label_name}",
+            f"@{label_name}_{self._uid}",
             "D;JNE"
         ]
 
@@ -428,7 +428,7 @@ class CodeWriter:
         """
         asm_code = [f"// function {name} {local_var_count}"]
 
-        func_label = name.upper() # self.add_uid(name.upper())
+        func_label = name.upper()
         asm_code += [f"({func_label})"]
 
         if 0 < local_var_count:
@@ -457,7 +457,7 @@ class CodeWriter:
         """
         """
         asm_code = [f"// call {func_name} {argument_count}"]
-        func_label = func_name.upper() # self.add_uid(func_name.upper())
+        func_label = func_name.upper()
         
         # Generic Hack ASM code for pushing a Dynamic Segment's Address
         # into the stack (as the regular vm_push is using segment names)
@@ -471,7 +471,7 @@ class CodeWriter:
         # (it is labeled, for example - RET_FOO.BAR_1, 
         # with FOO being the function name, BAR the file name, 
         # and 1 the call count e.g. how many calls preceeded in this file)
-        return_label = f"RET_{func_label}_{self._call_count}"
+        return_label = f"RET_{func_label}_{self._call_count}_{self._uid}"
         asm_code += [
             f"@{return_label}",
             "D=A" # We place the return address in the D register
@@ -595,12 +595,6 @@ class CodeWriter:
     # Utility functions #
     #####################
 
-    def add_uid(self, id: str) -> str:
-        """
-        Simply adding the unique identifier to the given string
-        """
-        return id + "." + self._uid
-    
     def _generate_segment_address(self, segment: str, internal_address: int) -> str:
         """
         Calling this function will generate Hack ASM code which places
