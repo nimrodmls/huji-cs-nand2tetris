@@ -14,4 +14,99 @@
 // Requirements:
 // - Changing R14, R15 is not allowed.
 
-// Put your code here.
+@R14
+D=M
+
+@currentmax
+M=D
+@currentmin
+M=D
+@iter
+M=1
+
+(FINDER)
+
+    @iter
+    D=M
+    @R15
+    D=D-M
+    @SWAPVALUES
+    D;JEQ
+
+    @iter
+    D=M
+    @R14
+    D=D+M
+    @currentelement
+    M=D
+
+    @currentelement
+    A=M
+    D=M
+    @currentmax
+    A=M
+    D=D-M
+    @FOUNDMAX
+    D;JGT
+    
+    @currentelement
+    A=M
+    D=M
+    @currentmin
+    A=M
+    D=D-M
+    @FOUNDMIN
+    D;JLT
+
+(FOUNDMAX)
+
+    @currentelement
+    D=M
+    @currentmax
+    M=D
+    @CONTINUEFIND
+    0;JMP
+
+(FOUNDMIN)
+
+    @currentelement
+    D=M
+    @currentmin
+    M=D
+    // Fallthrough!
+
+(CONTINUEFIND)
+
+    @iter
+    M=M+1
+    @FINDER
+    0;JMP
+
+(SWAPVALUES)
+    @currentmax
+    A=M
+    D=M
+    @maxval
+    M=D
+
+    @currentmin
+    A=M
+    D=M
+    @minval
+    M=D
+
+    @maxval
+    D=M
+    @currentmin
+    A=M
+    M=D
+
+    @minval
+    D=M
+    @currentmax
+    A=M
+    M=D
+
+(FINLOOP)
+    @FINLOOP
+    0;JMP
