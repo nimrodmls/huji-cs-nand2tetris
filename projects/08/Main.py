@@ -23,19 +23,27 @@ def translate_file(
         bootstrap (bool): if this is True, the current file is the 
             first file we are translating.
     """
-    # Your code goes here!
-    pass
+    parser = Parser(input_file)
+    
+    # Adding the name of the file to the beginning of the ASM sequence
+    output_file.write(f"// {os.path.basename(input_file.name)}\n")
 
+    # First, if bootstrap code is required, we call it
+    if bootstrap:
+        output_file.write(parser.get_bootstrap_code() + "\n")
 
-if "__main__" == __name__:
+    # Only then, we generate the VM-file's ASM code
+    asm = parser.parse_translate()
+    output_file.write(asm + "\n")
+
+def main(in_path):
     # Parses the input path and calls translate_file on each input file.
     # This opens both the input and the output files!
     # Both are closed automatically when the code finishes running.
     # If the output file does not exist, it is created automatically in the
     # correct path, using the correct filename.
-    if not len(sys.argv) == 2:
-        sys.exit("Invalid usage, please use: VMtranslator <input path>")
-    argument_path = os.path.abspath(sys.argv[1])
+
+    argument_path = os.path.abspath(in_path)
     if os.path.isdir(argument_path):
         files_to_translate = [
             os.path.join(argument_path, filename)
@@ -55,3 +63,8 @@ if "__main__" == __name__:
             with open(input_path, 'r') as input_file:
                 translate_file(input_file, output_file, bootstrap)
             bootstrap = False
+
+if "__main__" == __name__:
+    if not len(sys.argv) == 2:
+        sys.exit("Invalid usage, please use: VMtranslator <input path>")
+    main(sys.argv[1])
