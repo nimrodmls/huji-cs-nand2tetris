@@ -27,5 +27,5 @@ CHIP ShiftLeft {
     OUT out[16];
      
     PARTS:
-    // Put your code here:
+    Add16(a=in, b=in, out=out);
 }
