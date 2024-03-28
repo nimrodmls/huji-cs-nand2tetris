@@ -6,7 +6,38 @@ as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
 import typing
+from JackConstants import HACK_MAX_INT, HACK_MIN_INT, MIN_TEMP_SEGMENT, MAX_TEMP_SEGMENT
 
+class VMMemorySegments:
+    """
+    A class to hold the different memory segments in the VM language.
+    """
+    CONST = "constant"
+    ARG = "argument"
+    LOCAL = "local"
+    STATIC = "static"
+    THIS = "this"
+    THAT = "that"
+    POINTER = "pointer"
+    TEMP = "temp"
+    ALL = [CONST, ARG, LOCAL, STATIC, THIS, THAT, POINTER, TEMP]
+
+class VMArithmeticCommands:
+    """
+    A class to hold the different arithmetic commands in the VM language.
+    """
+    ADD = "add"
+    SUB = "sub"
+    NEG = "neg"
+    EQ = "eq"
+    GT = "gt"
+    LT = "lt"
+    AND = "and"
+    OR = "or"
+    NOT = "not"
+    SHIFTLEFT = "shiftleft"
+    SHIFTRIGHT = "shiftright"
+    ALL = [ADD, SUB, NEG, EQ, GT, LT, AND, OR, NOT, SHIFTLEFT, SHIFTRIGHT]
 
 class VMWriter:
     """
@@ -15,91 +46,109 @@ class VMWriter:
 
     def __init__(self, output_stream: typing.TextIO) -> None:
         """Creates a new file and prepares it for writing VM commands."""
-        # Your code goes here!
-        # Note that you can write to output_stream like so:
-        # output_stream.write("Hello world! \n")
-        pass
+        self._output_stream = output_stream
+
+    def write_documentation(self, documentation: str) -> None:
+        """Writes documentation to the output stream.
+
+        :param documentation: the documentation to write.
+        """
+        self._write_line(f"// {documentation}")
 
     def write_push(self, segment: str, index: int) -> None:
         """Writes a VM push command.
 
-        Args:
-            segment (str): the segment to push to, can be "CONST", "ARG", 
-            "LOCAL", "STATIC", "THIS", "THAT", "POINTER", "TEMP"
-            index (int): the index to push to.
+        :param segment: the segment to push to, as defined in VMMemorySegments.
+        :param index: the index to push to.
         """
-        # Your code goes here!
-        pass
+        VMWriter._validate_memory_access(segment, index)
+        self._write_line(f"push {segment} {index}")
 
     def write_pop(self, segment: str, index: int) -> None:
         """Writes a VM pop command.
 
-        Args:
-            segment (str): the segment to pop from, can be "CONST", "ARG", 
-            "LOCAL", "STATIC", "THIS", "THAT", "POINTER", "TEMP".
-            index (int): the index to pop from.
+        :param segment: the segment to pop from, as defined in VMMemorySegments.
+        :param index: the index to pop from.
         """
-        # Your code goes here!
-        pass
+        VMWriter._validate_memory_access(segment, index)
+        self._write_line(f"pop {segment} {index}")
 
     def write_arithmetic(self, command: str) -> None:
         """Writes a VM arithmetic command.
 
-        Args:
-            command (str): the command to write, can be "ADD", "SUB", "NEG", 
-            "EQ", "GT", "LT", "AND", "OR", "NOT", "SHIFTLEFT", "SHIFTRIGHT".
+        :param command: the command to write, as defined in VMArithmeticCommands.
         """
-        # Your code goes here!
-        pass
+        if command not in VMArithmeticCommands.ALL:
+            raise ValueError(f"VMWriter: Invalid arithmetic command {command}")
+        
+        self._write_line(command)
 
     def write_label(self, label: str) -> None:
         """Writes a VM label command.
 
-        Args:
-            label (str): the label to write.
+        :param label: the name of the label to write.
         """
-        # Your code goes here!
-        pass
+        self._write_line(f"label {label}")
 
     def write_goto(self, label: str) -> None:
         """Writes a VM goto command.
 
-        Args:
-            label (str): the label to go to.
+        :param label: the name of the label to go to.
         """
-        # Your code goes here!
-        pass
+        self._write_line(f"goto {label}")
 
-    def write_if(self, label: str) -> None:
+    def write_if_goto(self, label: str) -> None:
         """Writes a VM if-goto command.
 
-        Args:
-            label (str): the label to go to.
+        :parma label: the name of the label to go to if the condition is met.
         """
-        # Your code goes here!
-        pass
+        self._write_line(f"if-goto {label}")
 
     def write_call(self, name: str, n_args: int) -> None:
         """Writes a VM call command.
 
-        Args:
-            name (str): the name of the function to call.
-            n_args (int): the number of arguments the function receives.
+        :param name: the name of the function to call.
+        :param n_args: the number of arguments received by the function.
         """
-        # Your code goes here!
-        pass
+        self._write_line(f"call {name} {n_args}")
 
     def write_function(self, name: str, n_locals: int) -> None:
         """Writes a VM function command.
 
-        Args:
-            name (str): the name of the function.
-            n_locals (int): the number of local variables the function uses.
+        :param name: the name of the function.
+        :param n_locals: the number of local variables the function uses.
         """
-        # Your code goes here!
-        pass
+        self._write_line(f"function {name} {n_locals}")
 
     def write_return(self) -> None:
-        """Writes a VM return command."""
-        # Your code goes here!
-        pass
+        """
+        Writes a VM return command.
+        """
+        self._write_line("return")
+
+    def _write_line(self, line: str) -> None:
+        """
+        Writes a line to the output stream.
+        """
+        self._output_stream.write(line + "\n")
+
+    @staticmethod
+    def _validate_memory_access(segment: str, index: int) -> None:
+        """
+        Validates the access to memory segments via Pop/Push commands.
+
+        :param segment: the segment to access.
+        :param index: the index to access.
+        :raises ValueError: if the segment/index combination is invalid.
+        """
+        if segment not in VMMemorySegments.ALL:
+            raise ValueError(f"VMWriter: Invalid segment {segment}")
+        
+        if segment == VMMemorySegments.CONST and (HACK_MIN_INT > index or index > HACK_MAX_INT):
+            raise ValueError(f"VMWriter: Invalid constant {index}")
+        
+        if segment == VMMemorySegments.POINTER and index not in [0, 1]:
+            raise ValueError(f"VMWriter: Invalid pointer {index}")
+        
+        if segment == VMMemorySegments.TEMP and (0 > index or (index > HACK_MAX_INT - MIN_TEMP_SEGMENT + 1)):
+            raise ValueError(f"VMWriter: Invalid temp {index}")

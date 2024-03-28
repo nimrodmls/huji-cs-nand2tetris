@@ -22,21 +22,19 @@ def compile_file(
         input_file (typing.TextIO): the file to compile.
         output_file (typing.TextIO): writes all output to this file.
     """
-    # Your code goes here!
-    # This function should be relatively similar to "analyze_file" in
-    # JackAnalyzer.py from the previous project.
-    pass
+    print(f"Compiling {input_file.name}")
+    tokenizer = JackTokenizer(input_file)
+    engine = CompilationEngine(tokenizer, output_file)
+    engine.compile_class()
+    engine.finalize()
 
-
-if "__main__" == __name__:
+def main(input_path):
     # Parses the input path and calls compile_file on each input file.
     # This opens both the input and the output files!
     # Both are closed automatically when the code finishes running.
     # If the output file does not exist, it is created automatically in the
     # correct path, using the correct filename.
-    if not len(sys.argv) == 2:
-        sys.exit("Invalid usage, please use: JackCompiler <input path>")
-    argument_path = os.path.abspath(sys.argv[1])
+    argument_path = os.path.abspath(input_path)
     if os.path.isdir(argument_path):
         files_to_assemble = [
             os.path.join(argument_path, filename)
@@ -51,3 +49,7 @@ if "__main__" == __name__:
         with open(input_path, 'r') as input_file, \
                 open(output_path, 'w') as output_file:
             compile_file(input_file, output_file)
+    
+
+if "__main__" == __name__:
+    main(sys.argv[1])
